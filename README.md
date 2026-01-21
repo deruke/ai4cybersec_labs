@@ -1,6 +1,8 @@
 # AI4CyberSec Labs
 
-An Open WebUI-based Capture The Flag (CTF) environment focused on LLM prompt injection challenges. This project provides a complete training environment for learning about AI security, prompt injection attacks, and defensive techniques.
+Lab platform for AI for Cyber Security Professionals. It includes an Open WebUI-based chat bot and Capture The Flag (CTF) environment focused on LLM prompt injection challenges. It also N8n workflow examples and an custome offensive tool MCP server.
+
+This project provides a complete training environment for learning about AI security and using AI to complement cyber security workflows.
 
 ## Overview
 
