@@ -1,0 +1,917 @@
+#!/bin/bash
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default values for non-interactive mode
+INSTALL_PREREQUISITES=false
+SETUP_CTF=false
+AUTO_REBOOT=false
+NON_INTERACTIVE=false
+
+# Global variables for OS detection
+OS=""
+VER=""
+IS_WSL=false
+IS_MACOS=false
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -p, --prerequisites    Install system prerequisites (Docker, NVIDIA drivers)"
+    echo "  -c, --ctf             Setup full CTF environment (includes n8n, ASI-MCP, PostgreSQL)"
+    echo "  -a, --all             Install prerequisites AND setup CTF environment"
+    echo "  -r, --auto-reboot     Automatically reboot if required (non-interactive, Linux only)"
+    echo "  -n, --non-interactive Run in non-interactive mode (assumes yes to all prompts)"
+    echo "  -h, --help            Show this help message"
+    echo ""
+    echo "Services started by --ctf:"
+    echo "  - Open WebUI (CTF challenges interface)"
+    echo "  - Ollama (LLM model server)"
+    echo "  - Pipelines (prompt filtering)"
+    echo "  - Jupyter (code execution environment)"
+    echo "  - PostgreSQL (database for n8n)"
+    echo "  - n8n (workflow automation)"
+    echo "  - ASI-MCP (security testing server)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --all              # Install everything"
+    echo "  $0 --prerequisites    # Only install system prerequisites"
+    echo "  $0 --ctf              # Only setup CTF environment"
+    echo "  $0 --all --auto-reboot --non-interactive  # Full automated setup (Linux only)"
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--prerequisites)
+            INSTALL_PREREQUISITES=true
+            shift
+            ;;
+        -c|--ctf)
+            SETUP_CTF=true
+            shift
+            ;;
+        -a|--all)
+            INSTALL_PREREQUISITES=true
+            SETUP_CTF=true
+            shift
+            ;;
+        -r|--auto-reboot)
+            AUTO_REBOOT=true
+            shift
+            ;;
+        -n|--non-interactive)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Function to print colored output
+print_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to check if running as root (Linux only)
+check_root() {
+    if [[ "$IS_MACOS" == "true" ]]; then
+        # On macOS, we don't need root for most operations
+        return 0
+    fi
+    
+    if [[ $EUID -ne 0 ]]; then
+        print_error "This script must be run as root on Linux (use sudo)"
+        exit 1
+    fi
+}
+
+# Function to detect WSL
+detect_wsl() {
+    if grep -qEi "(Microsoft|WSL)" /proc/version &> /dev/null || [ -f /proc/sys/fs/binfmt_misc/WSLInterop ]; then
+        return 0  # WSL detected
+    else
+        return 1  # Not WSL
+    fi
+}
+
+# Function to detect OS
+detect_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        IS_MACOS=true
+        OS="macos"
+        VER=$(sw_vers -productVersion)
+        print_info "Detected OS: macOS $VER"
+        
+        # Check for Apple Silicon vs Intel
+        if [[ $(uname -m) == "arm64" ]]; then
+            print_info "Architecture: Apple Silicon (ARM64)"
+        else
+            print_info "Architecture: Intel (x86_64)"
+        fi
+        
+        return 0
+    fi
+    
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        VER=$VERSION_ID
+    else
+        print_error "Cannot detect OS. This script requires Debian, Ubuntu, or macOS."
+        exit 1
+    fi
+
+    if [[ "$OS" != "debian" && "$OS" != "ubuntu" ]]; then
+        print_error "This script only supports Debian, Ubuntu, and macOS."
+        exit 1
+    fi
+
+    print_info "Detected OS: $OS $VER"
+    
+    # Check for WSL
+    if detect_wsl; then
+        IS_WSL=true
+        print_info "WSL environment detected"
+    fi
+}
+
+# Function to install system updates
+install_updates() {
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "Updating Homebrew packages..."
+        if command -v brew &> /dev/null; then
+            brew update
+            brew upgrade
+        else
+            print_warning "Homebrew not found. Will install it first."
+        fi
+    else
+        print_info "Updating system packages..."
+        apt-get update
+        apt-get upgrade -y
+    fi
+    print_success "System packages updated"
+}
+
+# Function to install Homebrew on macOS
+install_homebrew() {
+    if [[ "$IS_MACOS" != "true" ]]; then
+        return 0
+    fi
+    
+    if command -v brew &> /dev/null; then
+        print_info "Homebrew already installed"
+        return 0
+    fi
+    
+    print_info "Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    
+    # Add Homebrew to PATH for Apple Silicon Macs
+    if [[ $(uname -m) == "arm64" ]]; then
+        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+    
+    print_success "Homebrew installed"
+}
+
+# Function to install basic prerequisites
+install_prerequisites() {
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "Installing basic prerequisites on macOS..."
+        
+        # Ensure Homebrew is installed
+        install_homebrew
+        
+        # Install basic packages
+        brew install curl wget git
+        
+        # Install command line tools if not already installed
+        if ! xcode-select -p &> /dev/null; then
+            print_info "Installing Xcode Command Line Tools..."
+            xcode-select --install
+            print_warning "Please complete the Xcode Command Line Tools installation and re-run the script."
+            exit 0
+        fi
+        
+        print_success "Basic prerequisites installed on macOS"
+        return 0
+    fi
+    
+    print_info "Installing basic prerequisites..."
+    
+    # Base packages to install
+    PACKAGES="apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common wget git build-essential alsa-utils"
+    
+    # Add linux-headers only if not in WSL
+    if [[ "$IS_WSL" != "true" ]]; then
+        PACKAGES="$PACKAGES linux-headers-$(uname -r)"
+    else
+        print_info "Skipping linux-headers installation in WSL environment"
+    fi
+    
+    apt-get install -y $PACKAGES
+    print_success "Basic prerequisites installed"
+}
+
+# Function to detect NVIDIA GPU
+detect_nvidia_gpu() {
+    print_info "Checking for NVIDIA GPU..."
+    
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "macOS detected. NVIDIA GPU support is limited on modern Macs."
+        print_info "Most modern Macs use Apple Silicon or AMD GPUs."
+        return 1
+    fi
+    
+    # Check if running in WSL
+    if [[ "$IS_WSL" == "true" ]]; then
+        print_warning "WSL environment detected. GPU support is handled by Windows host."
+        print_info "Skipping NVIDIA driver installation in WSL."
+        return 1
+    fi
+    
+    if lspci | grep -i nvidia > /dev/null; then
+        print_info "NVIDIA GPU detected"
+        return 0
+    else
+        print_warning "No NVIDIA GPU detected. Skipping NVIDIA driver installation."
+        return 1
+    fi
+}
+
+# Function to create docker-compose override for GPU mode
+create_gpu_override() {
+    print_info "Creating docker-compose override for GPU mode..."
+    
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_warning "GPU passthrough not supported on macOS. Creating CPU-only configuration."
+        return 0
+    fi
+    
+    cat > docker-compose.override.yml << 'EOF'
+# This override file enables GPU support for systems with NVIDIA GPUs
+version: '3.8'
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  open-webui:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  jupyter:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+EOF
+    print_success "Created docker-compose.override.yml for GPU mode"
+}
+
+# Function to install NVIDIA drivers
+install_nvidia_drivers() {
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "macOS detected - NVIDIA GPU drivers not applicable"
+        print_info "Modern Macs use Apple Silicon or AMD GPUs with Metal acceleration"
+        return 0
+    fi
+    
+    # Check if running in WSL first
+    if [[ "$IS_WSL" == "true" ]]; then
+        print_info "WSL environment detected."
+        print_info "NVIDIA GPU support in WSL2 is provided by the Windows host."
+        print_info "Please ensure you have:"
+        print_info "  1. NVIDIA drivers installed on Windows"
+        print_info "  2. WSL2 (not WSL1)"
+        print_info "  3. Windows 11 or Windows 10 version 21H2 or higher"
+        print_info "For more info: https://docs.nvidia.com/cuda/wsl-user-guide/index.html"
+        
+        # Still need to install NVIDIA Container Toolkit for Docker
+        print_info "Installing NVIDIA Container Toolkit for Docker in WSL..."
+        
+        # Remove old GPG key method and use the new method
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        
+        # Add the repository with the new GPG key location
+        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+          sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+          sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        
+        # Update and install
+        apt-get update
+        apt-get install -y nvidia-container-toolkit
+        
+        # Configure Docker to use NVIDIA runtime
+        nvidia-ctk runtime configure --runtime=docker
+        
+        # WSL uses different service management
+        print_info "Restarting Docker service..."
+        if service docker restart 2>/dev/null; then
+            print_success "Docker restarted with NVIDIA runtime"
+        else
+            print_warning "Could not restart Docker automatically in WSL. Please restart Docker manually:"
+            print_info "  sudo service docker restart"
+        fi
+        
+        print_success "NVIDIA Container Toolkit installed for WSL"
+        return
+    fi
+    
+    if ! detect_nvidia_gpu; then
+        return
+    fi
+
+    print_info "Installing NVIDIA drivers and CUDA toolkit..."
+    
+    # Remove old NVIDIA installations
+    apt-get remove --purge -y nvidia* cuda* 2>/dev/null || true
+    apt-get autoremove -y
+
+    # Add NVIDIA repository
+    if [[ "$OS" == "ubuntu" ]]; then
+        # For Ubuntu
+        # First install ubuntu-drivers-common
+        apt-get install -y ubuntu-drivers-common
+        
+        # Add the graphics drivers PPA
+        add-apt-repository -y ppa:graphics-drivers/ppa
+        apt-get update
+        
+        # Install recommended driver
+        ubuntu-drivers autoinstall
+    else
+        # For Debian
+        apt-get update
+        apt-get install -y nvidia-driver firmware-misc-nonfree
+    fi
+
+    # Install NVIDIA Container Toolkit for Docker
+    print_info "Installing NVIDIA Container Toolkit..."
+    
+    # Remove old GPG key method and use the new method
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    
+    # Add the repository with the new GPG key location
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+      sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+      sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+    
+    # Update and install
+    apt-get update
+    apt-get install -y nvidia-container-toolkit
+    
+    # Configure Docker to use NVIDIA runtime
+    nvidia-ctk runtime configure --runtime=docker
+    
+    # Check if Docker service exists before trying to restart
+    if systemctl list-unit-files | grep -q "^docker.service"; then
+        systemctl restart docker
+        print_success "Docker restarted with NVIDIA runtime"
+    else
+        print_warning "Docker service not found. You may need to start Docker manually."
+    fi
+    
+    print_success "NVIDIA drivers and container toolkit installed"
+    print_warning "A system reboot may be required for NVIDIA drivers to take effect"
+}
+
+# Function to install Docker
+install_docker() {
+    print_info "Installing Docker..."
+    
+    if [[ "$IS_MACOS" == "true" ]]; then
+        # Check if Docker is already installed
+        if command -v docker &> /dev/null; then
+            print_success "Docker already installed"
+            return 0
+        fi
+        
+        # Check if Docker Desktop is installed
+        if [ -d "/Applications/Docker.app" ]; then
+            print_success "Docker Desktop already installed"
+            print_info "Please ensure Docker Desktop is running"
+            return 0
+        fi
+        
+        print_info "Installing Docker Desktop for macOS..."
+        print_warning "Docker Desktop installation requires manual steps:"
+        print_info "1. Download Docker Desktop from: https://www.docker.com/products/docker-desktop/"
+        print_info "2. Install the .dmg file"
+        print_info "3. Start Docker Desktop"
+        print_info "4. Re-run this script to continue"
+        
+        if [[ "$NON_INTERACTIVE" != "true" ]]; then
+            read -p "Press Enter after installing Docker Desktop..."
+        fi
+        
+        # Check if Docker is now available
+        if ! command -v docker &> /dev/null; then
+            print_error "Docker not found. Please install Docker Desktop and ensure it's running."
+            exit 1
+        fi
+        
+        print_success "Docker Desktop detected"
+        return 0
+    fi
+    
+    # Linux installation
+    # Remove old Docker installations
+    apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+
+    # Add Docker's official GPG key
+    curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+    # Set up the stable repository
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS \
+      $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Install Docker Engine
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+    # Handle Docker service startup differently for WSL vs native Linux
+    if [[ "$IS_WSL" == "true" ]]; then
+        print_info "Starting Docker in WSL environment..."
+        service docker start || true
+        sleep 5
+        
+        # Verify Docker is running
+        if ! docker version > /dev/null 2>&1; then
+            print_warning "Docker service may not be running. In WSL, you might need to:"
+            print_info "  1. Start Docker manually: sudo service docker start"
+            print_info "  2. Or use Docker Desktop for Windows with WSL2 integration"
+        else
+            print_success "Docker service is running"
+        fi
+    else
+        # Native Linux - use systemctl
+        systemctl enable docker
+        systemctl start docker
+        
+        # Verify Docker is running
+        if ! systemctl is-active --quiet docker; then
+            print_error "Docker service failed to start"
+            print_info "Trying to start Docker manually..."
+            service docker start
+            sleep 5
+            if ! systemctl is-active --quiet docker; then
+                print_error "Docker service still not running. Please check system logs."
+                exit 1
+            fi
+        fi
+        
+        print_success "Docker service is running"
+    fi
+
+    # Add current user to docker group (if not root and not macOS)
+    if [[ "$IS_MACOS" != "true" ]] && [ "$SUDO_USER" ]; then
+        usermod -aG docker $SUDO_USER
+        print_info "Added $SUDO_USER to docker group. User needs to log out and back in for this to take effect."
+    fi
+
+    print_success "Docker installed successfully"
+}
+
+# Function to configure Docker for NVIDIA
+configure_docker_nvidia() {
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "macOS detected - NVIDIA Docker configuration not applicable"
+        return 0
+    fi
+    
+    # Skip GPU detection for WSL - let it try to configure if container toolkit is installed
+    if [[ "$IS_WSL" == "true" ]]; then
+        print_info "Configuring Docker for NVIDIA GPU support in WSL..."
+        
+        # Check if nvidia-container-toolkit is installed
+        if ! command -v nvidia-ctk &> /dev/null; then
+            print_warning "NVIDIA Container Toolkit not found. Skipping Docker GPU configuration."
+            return
+        fi
+    elif ! detect_nvidia_gpu; then
+        return
+    fi
+
+    print_info "Configuring Docker for NVIDIA GPU support..."
+    
+    # First check if Docker is running
+    if [[ "$IS_WSL" == "true" ]]; then
+        # In WSL, check if docker daemon is responding
+        if ! docker version > /dev/null 2>&1; then
+            print_warning "Docker is not running. Skipping NVIDIA configuration."
+            print_info "Please start Docker and run 'nvidia-ctk runtime configure --runtime=docker' manually."
+            return
+        fi
+    else
+        # Native Linux - use systemctl
+        if ! systemctl is-active --quiet docker; then
+            print_warning "Docker is not running. Skipping NVIDIA configuration."
+            print_info "Please start Docker and run 'nvidia-ctk runtime configure --runtime=docker' manually."
+            return
+        fi
+    fi
+    
+    # Configure Docker daemon
+    cat > /etc/docker/daemon.json <<EOF
+{
+    "default-runtime": "nvidia",
+    "runtimes": {
+        "nvidia": {
+            "path": "nvidia-container-runtime",
+            "runtimeArgs": []
+        }
+    }
+}
+EOF
+
+    # Restart Docker
+    if [[ "$IS_WSL" == "true" ]]; then
+        print_info "Restarting Docker service in WSL..."
+        if service docker restart 2>/dev/null; then
+            print_success "Docker restarted with NVIDIA runtime"
+        else
+            print_warning "Could not restart Docker automatically. Please restart manually:"
+            print_info "  sudo service docker restart"
+        fi
+    else
+        systemctl restart docker
+        print_success "Docker configured for NVIDIA GPU support"
+    fi
+}
+
+# Function to verify installations
+verify_installations() {
+    print_info "Verifying installations..."
+    
+    # Check Docker
+    if docker --version > /dev/null 2>&1; then
+        print_success "Docker: $(docker --version)"
+    else
+        print_error "Docker installation failed or Docker is not running"
+        if [[ "$IS_MACOS" == "true" ]]; then
+            print_info "On macOS, ensure Docker Desktop is running"
+        fi
+        exit 1
+    fi
+
+    # Check Docker Compose
+    if docker compose version > /dev/null 2>&1; then
+        print_success "Docker Compose: $(docker compose version)"
+    else
+        print_error "Docker Compose installation failed"
+        exit 1
+    fi
+
+    # Check NVIDIA (if GPU present and not WSL and not macOS)
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "macOS - GPU verification not applicable (using CPU-only mode)"
+        return 0
+    fi
+    
+    if [[ "$IS_WSL" == "true" ]]; then
+        print_info "WSL environment - GPU verification handled by Windows host"
+        # Try to run nvidia-smi directly
+        if nvidia-smi > /dev/null 2>&1; then
+            print_success "NVIDIA GPU accessible in WSL"
+            nvidia-smi
+        elif /usr/bin/nvidia-smi > /dev/null 2>&1; then
+            print_success "NVIDIA GPU accessible in WSL"
+            /usr/bin/nvidia-smi
+        elif /usr/local/bin/nvidia-smi > /dev/null 2>&1; then
+            print_success "NVIDIA GPU accessible in WSL"
+            /usr/local/bin/nvidia-smi
+        else
+            print_info "nvidia-smi not accessible - ensure GPU drivers are installed on Windows host"
+        fi
+    elif detect_nvidia_gpu; then
+        if nvidia-smi > /dev/null 2>&1; then
+            print_success "NVIDIA drivers installed and working"
+            nvidia-smi
+        else
+            print_warning "NVIDIA drivers installed but not yet active. Please reboot."
+        fi
+    fi
+}
+
+# Main CTF setup function
+setup_ctf_environment() {
+    echo ""
+    echo "🏁 Initializing AI4CyberSec Labs Environment"
+    echo "============================================"
+    echo "Setting up: CTF + n8n + ASI-MCP + PostgreSQL"
+    echo ""
+
+    # Check for GPU and create override file if needed
+    GPU_AVAILABLE=false
+    
+    if [[ "$IS_MACOS" == "true" ]]; then
+        print_info "macOS detected - Using CPU-only configuration"
+        GPU_AVAILABLE=false
+    elif [[ "$IS_WSL" == "true" ]]; then
+        print_info "Checking for GPU in WSL environment..."
+        
+        # Debug: Show current PATH and which nvidia-smi
+        print_info "Current PATH: $PATH"
+        print_info "Checking for nvidia-smi location..."
+        which nvidia-smi 2>/dev/null && print_info "Found nvidia-smi at: $(which nvidia-smi)"
+        
+        # Try running nvidia-smi with full path from Windows
+        # Common WSL nvidia-smi locations
+        NVIDIA_SMI_PATHS=(
+            "nvidia-smi"
+            "/usr/bin/nvidia-smi"
+            "/usr/local/bin/nvidia-smi"
+            "/mnt/c/Windows/System32/nvidia-smi.exe"
+            "/usr/lib/wsl/lib/nvidia-smi"
+        )
+        
+        GPU_FOUND=false
+        for nvidia_path in "${NVIDIA_SMI_PATHS[@]}"; do
+            print_info "Trying: $nvidia_path"
+            if $nvidia_path > /dev/null 2>&1; then
+                GPU_AVAILABLE=true
+                GPU_FOUND=true
+                print_success "GPU detected in WSL via $nvidia_path - Creating GPU configuration"
+                create_gpu_override
+                break
+            fi
+        done
+        
+        if [[ "$GPU_FOUND" == "false" ]]; then
+            print_info "No GPU detected in WSL - Using CPU-only configuration"
+            print_info "If you have a GPU, try running: which nvidia-smi"
+            print_info "Then add that path to the script or ensure it's in sudo's PATH"
+        fi
+    elif lspci 2>/dev/null | grep -i nvidia > /dev/null && command -v nvidia-smi &> /dev/null && nvidia-smi > /dev/null 2>&1; then
+        GPU_AVAILABLE=true
+        print_info "GPU detected and NVIDIA drivers working - Creating GPU configuration"
+        create_gpu_override
+    else
+        GPU_AVAILABLE=false
+        print_info "No GPU detected or NVIDIA drivers not working - Using CPU-only configuration"
+    fi
+    
+    # Remove override file for CPU-only setup
+    if [[ "$GPU_AVAILABLE" == "false" ]] && [ -f docker-compose.override.yml ]; then
+        rm docker-compose.override.yml
+        print_info "Removed existing docker-compose.override.yml for CPU-only mode"
+    fi
+
+    # Load environment variables if .env exists
+    if [ -f .env ]; then
+        echo "📋 Loading environment variables from .env"
+        export $(cat .env | grep -v '^#' | xargs)
+    fi
+
+    # Build and start all services
+    echo "🔨 Building Docker images..."
+    docker compose build
+
+    echo "🚀 Starting all services..."
+    docker compose up -d
+
+    echo "⏳ Waiting for services to be ready..."
+    sleep 30
+
+    # Verify services are running
+    echo "✅ Verifying services..."
+    docker compose ps
+
+    # Wait for PostgreSQL to be healthy before checking n8n
+    echo "⏳ Waiting for PostgreSQL to be ready..."
+    for i in {1..30}; do
+        if docker exec postgres pg_isready -U ${POSTGRES_USER:-n8n} > /dev/null 2>&1; then
+            echo "✅ PostgreSQL is ready"
+            break
+        fi
+        sleep 2
+    done
+
+    # Verify service connectivity
+    echo ""
+    echo "🔗 Verifying service connectivity..."
+
+    # Check ASI-MCP health
+    if curl -s http://localhost:${MCP_PORT:-3000}/health > /dev/null 2>&1; then
+        echo "✅ ASI-MCP server is healthy"
+    else
+        echo "⚠️  ASI-MCP server not responding yet (may still be starting)"
+    fi
+
+    # Check n8n health
+    if curl -s http://localhost:${N8N_PORT:-5678}/healthz > /dev/null 2>&1; then
+        echo "✅ n8n is healthy"
+    else
+        echo "⚠️  n8n not responding yet (may still be starting)"
+    fi
+
+    echo ""
+    echo "✅ CTF environment setup complete!"
+    echo ""
+    echo "📋 Access Information:"
+    echo "- Open WebUI: http://localhost:${OPENWEBUI_PORT:-4343}"
+    echo "- Jupyter: http://localhost:${JUPYTER_PORT:-8888}"
+    echo "- Jupyter Token: ${JUPYTER_TOKEN:-AntiSyphonBlackHillsTrainingFtw!}"
+    echo "- n8n Workflow Automation: http://localhost:${N8N_PORT:-5678}"
+    echo "- ASI-MCP Security Server: http://localhost:${MCP_PORT:-3000}"
+    echo "- PostgreSQL: localhost:${POSTGRES_PORT:-5432}"
+    echo ""
+    echo "🔐 Login Credentials:"
+    echo "- CTF Admin: ${CTF_ADMIN_EMAIL:-admin@ctf.local} / ${CTF_ADMIN_PASSWORD:-ctf_admin_password}"
+    echo "- CTF User: ${CTF_USER_EMAIL:-ctf@ctf.local} / ${CTF_USER_PASSWORD:-Hellollmworld!}"
+    echo "- PostgreSQL: ${POSTGRES_USER:-n8n} / ${POSTGRES_PASSWORD:-n8n_password} (database: ${POSTGRES_DB:-n8n})"
+    echo ""
+    echo "🚩 CTF Challenges:"
+    echo "- Challenge 1: No protections - basic prompt injection"
+    echo "- Challenge 2: System prompt with anti-injection instructions"
+    echo "- Challenge 3: Input filtering"
+    echo "- Challenge 4: Output filtering"
+    echo "- Challenge 5: ML-based prompt guard pipeline"
+    echo ""
+    echo "🔧 Automation & Security Testing:"
+    echo "- n8n can access Ollama at http://ollama:11434"
+    echo "- n8n can access ASI-MCP at http://mcp-security-server:3000"
+    echo "- ASI-MCP provides security scanning tools via MCP protocol"
+    echo ""
+    
+    if [[ "$IS_MACOS" == "true" ]]; then
+        echo "🍎 Running on macOS in CPU-only mode"
+    elif [[ "$GPU_AVAILABLE" == "false" ]]; then
+        echo "⚠️  Running in CPU-only mode (no GPU detected or drivers not working)"
+    else
+        echo "✅ Running with GPU support enabled"
+    fi
+    
+    if [[ "$IS_WSL" == "true" ]]; then
+        echo ""
+        echo "📌 WSL Note: GPU support requires proper setup on Windows host"
+    fi
+}
+
+# Main execution
+main() {
+    echo "=============================================="
+    echo "AI4CyberSec Labs - Complete Setup Script"
+    echo "=============================================="
+    echo "CTF Environment + n8n + ASI-MCP + PostgreSQL"
+    echo ""
+
+    # Detect OS first
+    detect_os
+
+    # Check if running as root (Linux only)
+    check_root
+
+    # If no arguments provided and not non-interactive, run interactive mode
+    if [[ "$INSTALL_PREREQUISITES" == "false" && "$SETUP_CTF" == "false" && "$NON_INTERACTIVE" == "false" ]]; then
+        # Interactive mode - ask user what they want to do
+        read -p "Do you want to install system prerequisites (Docker, NVIDIA drivers)? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            INSTALL_PREREQUISITES=true
+        fi
+
+        echo ""
+        read -p "Do you want to setup the CTF environment? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            SETUP_CTF=true
+        fi
+    fi
+
+    # Install prerequisites if requested
+    if [[ "$INSTALL_PREREQUISITES" == "true" ]]; then
+        print_info "Installing system prerequisites..."
+        
+        # Install system updates
+        install_updates
+
+        # Install prerequisites
+        install_prerequisites
+
+        # Install NVIDIA drivers (Linux only)
+        if [[ "$IS_MACOS" != "true" ]]; then
+            install_nvidia_drivers
+        fi
+
+        # Install Docker
+        install_docker
+
+        # Configure Docker for NVIDIA (Linux only)
+        if [[ "$IS_MACOS" != "true" ]]; then
+            configure_docker_nvidia
+        fi
+
+        # Verify installations
+        verify_installations
+
+        print_info "System prerequisites installation complete!"
+        
+        # Check if reboot is needed for NVIDIA (skip for WSL and macOS)
+        if [[ "$IS_MACOS" != "true" ]] && [[ "$IS_WSL" != "true" ]] && detect_nvidia_gpu && ! nvidia-smi > /dev/null 2>&1; then
+            print_warning "NVIDIA drivers require a system reboot to become active."
+            
+            if [[ "$NON_INTERACTIVE" == "true" ]]; then
+                if [[ "$AUTO_REBOOT" == "true" ]]; then
+                    print_info "Auto-reboot enabled. System will reboot in 10 seconds."
+                    print_info "Please run '$0 --ctf' after reboot to continue CTF setup."
+                    sleep 10
+                    reboot
+                else
+                    print_warning "Reboot required but auto-reboot not enabled."
+                    print_warning "Please reboot manually and run '$0 --ctf' to continue CTF setup."
+                    exit 0
+                fi
+            else
+                read -p "Do you want to reboot now? [y/N] " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    print_info "System will reboot in 10 seconds. Please run '$0 --ctf' after reboot to continue CTF setup."
+                    sleep 10
+                    reboot
+                else
+                    print_warning "Please reboot manually and run '$0 --ctf' to continue CTF setup."
+                    exit 0
+                fi
+            fi
+        fi
+    fi
+
+    # Setup CTF environment if requested
+    if [[ "$SETUP_CTF" == "true" ]]; then
+        # Check if Docker is installed
+        if ! command -v docker &> /dev/null; then
+            print_error "Docker is not installed. Please run '$0 --prerequisites' first."
+            exit 1
+        fi
+        
+        # Check if Docker is running
+        if ! docker version > /dev/null 2>&1; then
+            print_error "Docker is not running. Please start Docker and try again."
+            if [[ "$IS_MACOS" == "true" ]]; then
+                print_info "On macOS, start Docker Desktop application."
+            fi
+            exit 1
+        fi
+        
+        setup_ctf_environment
+    fi
+
+    if [[ "$INSTALL_PREREQUISITES" == "false" && "$SETUP_CTF" == "false" ]]; then
+        print_warning "No actions were selected. Use -h for help."
+        show_usage
+        exit 0
+    fi
+
+    print_success "Setup complete!"
+}
+
+# Run main function
+main

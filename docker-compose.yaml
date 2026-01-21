@@ -1,0 +1,185 @@
+services:
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    container_name: ollama
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    environment:
+      - OLLAMA_DEBUG=1
+    restart: unless-stopped
+  open-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile.openwebui
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+    ports:
+      - "${OPENWEBUI_PORT:-4242}:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=
+      - ENABLE_RAG_WEB_SEARCH=false
+      - ENABLE_SIGNUP=true
+      - DEFAULT_USER_ROLE=user
+      - ENABLE_ADMIN_EXPORT=true
+      - ENABLE_COMMUNITY_SHARING=false
+      - ENABLE_API_KEY=true
+      - ENABLE_MESSAGE_RATING=false
+      - CTF_FLAG_CHALLENGE_8=${CTF_FLAG_CHALLENGE_8}  # Added this line
+    restart: unless-stopped
+    depends_on:
+      - ollama
+      - pipelines
+  pipelines:
+    image: ghcr.io/open-webui/pipelines:main
+    container_name: pipelines
+    volumes:
+      - pipelines:/app/pipelines
+    ports:
+      - "${PIPELINES_PORT:-9099}:9099"
+    environment:
+      - PIPELINES_ENV=production
+    restart: unless-stopped
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    container_name: jupyter
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-AntiSyphonBlackHillsTrainingFtw!}
+    volumes:
+      - jupyter-work:/home/jovyan/work
+    restart: unless-stopped
+    command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-AntiSyphonBlackHillsTrainingFtw!}'
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-n8n}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n_password}
+      - POSTGRES_DB=${POSTGRES_DB:-n8n}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n} -d ${POSTGRES_DB:-n8n}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./asi-msp/logs:/asi-mcp-logs:ro
+      - ./asi-msp:/asi-mcp:ro
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${TIMEZONE:-UTC}
+      - N8N_RESTRICT_FILE_ACCESS_TO=/asi-mcp-logs;/asi-mcp;/home/node/.n8n-files
+      # PostgreSQL database configuration
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n_password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  mcp-security-server:
+    build:
+      context: ./asi-msp
+      dockerfile: Dockerfile
+    container_name: mcp-security-server
+    ports:
+      - "${MCP_PORT:-3000}:3000"
+    environment:
+      - MCP_TOKEN=${MCP_TOKEN:-change-this-token-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE=/app/logs/server.log
+      - AUDIT_LOG_PATH=/app/logs/audit.log
+      - AUTHORIZED_NETWORKS=${AUTHORIZED_NETWORKS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      - BLACKLISTED_NETWORKS=${BLACKLISTED_NETWORKS:-127.0.0.0/8,169.254.0.0/16}
+      - AUTHORIZED_DOMAINS=${AUTHORIZED_DOMAINS:-}
+      - CONFIG_PATH=/app/config/tools.yaml
+      - DEBUG=${DEBUG:-false}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./asi-msp/logs:/app/logs
+      - ./asi-msp/config:/app/config
+      - scan-results:/tmp/scans
+    restart: unless-stopped
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+  ctf-setup:
+    build:
+      context: .
+      dockerfile: Dockerfile.ctfsetup
+    container_name: ctf-setup
+    environment:
+      # Copy all environment variables for substitution
+      - CTF_ADMIN_EMAIL=${CTF_ADMIN_EMAIL}
+      - CTF_ADMIN_PASSWORD=${CTF_ADMIN_PASSWORD}
+      - CTF_ADMIN_NAME=${CTF_ADMIN_NAME}
+      - CTF_USER_EMAIL=${CTF_USER_EMAIL}
+      - CTF_USER_PASSWORD=${CTF_USER_PASSWORD}
+      - CTF_USER_NAME=${CTF_USER_NAME}
+      - OPENWEBUI_URL=${OPENWEBUI_URL}
+      - JUPYTER_PORT=${JUPYTER_PORT}
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+      - PIPELINES_PORT=${PIPELINES_PORT}
+      - CTF_FLAG_CHALLENGE_1=${CTF_FLAG_CHALLENGE_1}
+      - CTF_FLAG_CHALLENGE_2=${CTF_FLAG_CHALLENGE_2}
+      - CTF_FLAG_CHALLENGE_3=${CTF_FLAG_CHALLENGE_3}
+      - CTF_FLAG_CHALLENGE_4=${CTF_FLAG_CHALLENGE_4}
+      - CTF_FLAG_CHALLENGE_5=${CTF_FLAG_CHALLENGE_5}
+      - CTF_FLAG_CHALLENGE_6=${CTF_FLAG_CHALLENGE_6}
+      - CTF_FLAG_CHALLENGE_7=${CTF_FLAG_CHALLENGE_7}
+      - CTF_FLAG_CHALLENGE_8=${CTF_FLAG_CHALLENGE_8}
+      - CTF_FLAG_CHALLENGE_9=${CTF_FLAG_CHALLENGE_9}
+    depends_on:
+      open-webui:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      jupyter:
+        condition: service_started
+      pipelines:
+        condition: service_started
+    restart: "no"
+volumes:
+  ollama:
+  open-webui:
+  pipelines:
+  jupyter-work:
+  postgres_data:
+  n8n_data:
+  scan-results:

@@ -1,0 +1,762 @@
+{
+  "name": "AI powered digest for security and AI news",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 1,
+              "triggerAtMinute": 35
+            }
+          ]
+        }
+      },
+      "id": "56b68342-2684-41de-9d17-faec1c8aa7a3",
+      "name": "Trigger Daily Digest",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        -592,
+        512
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9aec0a09-4b6f-4fca-98e6-789abd5fdc51",
+              "name": "title",
+              "type": "string",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "id": "56277e54-31a0-4804-ad23-c9ee6d244641",
+              "name": "content",
+              "type": "string",
+              "value": "={{ $json.contentSnippet }}"
+            },
+            {
+              "id": "a3586a80-588e-42d1-9780-370a956ddf6b",
+              "name": "link",
+              "type": "string",
+              "value": "={{ $json.link }}"
+            },
+            {
+              "id": "58f01618-8014-4685-9192-d15d596ffcd9",
+              "name": "isoDate",
+              "type": "number",
+              "value": "={{ new Date($json.isoDate).getTime() }}"
+            },
+            {
+              "id": "716bb078-8df3-4d96-8a1b-4aec4f8cf206",
+              "name": "categories",
+              "type": "array",
+              "value": "={{ $json.categories }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fee0eac7-52eb-4340-b70e-f9746c76f4c1",
+      "name": "Normalize Article Security Metadata",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        880,
+        224
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "e7cf09fb-af35-495d-a840-341f8d0ddcd8",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $json.isoDate }}",
+              "rightValue": "={{ Date.now() - 24 * 60 * 60 * 1000 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "02e0c76e-a5cb-4f60-ba90-566c3bc9f0d5",
+      "name": "Filter Recent Security Articles (24h)",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        1104,
+        224
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dynamic n8n Newsletter Generator - Function Node\n// This code processes security news articles from a previous node and formats them into an HTML email\n\n// Get items from the previous node\nlet newsItems = [];\n\ntry {\n  if ($input && $input.all().length > 0) {\n    const inputItems = $input.all();\n    if (inputItems.length === 1 && Array.isArray(inputItems[0].json)) {\n      newsItems = inputItems[0].json;\n    } else {\n      newsItems = inputItems.map(item => item.json);\n    }\n  } else if (typeof items !== 'undefined' && items.length > 0) {\n    if (items.length === 1 && Array.isArray(items[0].json)) {\n      newsItems = items[0].json;\n    } else {\n      newsItems = items.map(item => item.json);\n    }\n  }\n  console.log(`Successfully processed input, found ${newsItems.length} news items`);\n} catch (error) {\n  console.log(`Error processing input: ${error.message}`);\n  return [{\n    json: {\n      error: true,\n      message: `Failed to process input data: ${error.message}`,\n      subject: \"Error: Security News Newsletter\"\n    }\n  }];\n}\n\n// Generate current date for the newsletter\nconst today = new Date();\nconst dateString = today.toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\n// Optional: Filter for recent articles only\nconst hoursToInclude = 24;\nlet filteredArticles = newsItems;\nif (hoursToInclude > 0) {\n  const cutoffTime = Date.now() - (hoursToInclude * 60 * 60 * 1000);\n  filteredArticles = newsItems.filter(article => {\n    const articleDate = article.isoDate\n      ? (typeof article.isoDate === 'number'\n         ? article.isoDate\n         : new Date(article.isoDate).getTime())\n      : 0;\n    return articleDate >= cutoffTime;\n  });\n  console.log(`Filtered to ${filteredArticles.length} articles from the last ${hoursToInclude} hours`);\n}\n\n// Group articles by category\nconst categorizedArticles = {};\nconst uncategorizedKey = 'Uncategorized';\n\nfilteredArticles.forEach(article => {\n  if (!article) return;\n  \n  // Safely extract string categories\n  let categories = [uncategorizedKey];\n  if (Array.isArray(article.categories)) {\n    categories = article.categories\n      .map(cat => {\n        if (typeof cat === 'string') return cat;\n        if (cat && typeof cat.name === 'string') return cat.name;\n        return '';\n      })\n      .map(str => str.trim())\n      .filter(str => str.length > 0);\n    if (categories.length === 0) categories = [uncategorizedKey];\n  } else if (typeof article.categories === 'string' && article.categories.trim()) {\n    categories = [article.categories.trim()];\n  }\n\n  categories.forEach(category => {\n    const name = category || uncategorizedKey;\n    if (!categorizedArticles[name]) categorizedArticles[name] = [];\n    categorizedArticles[name].push(article);\n  });\n});\n\n// Generate HTML for the newsletter\nfunction generateNewsletterHTML() {\n  const styles = `\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }\n    h1 { color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; }\n    h2 { color: #c0392b; margin-top: 30px; border-left: 4px solid #e74c3c; padding-left: 10px; }\n    .article { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n    .article h3 { margin-top: 0; color: #34495e; }\n    .article-content { color: #555; margin-bottom: 10px; }\n    .article-link { color: #e74c3c; text-decoration: none; font-weight: bold; }\n    .article-link:hover { text-decoration: underline; }\n    .article-date { color: #7f8c8d; font-size: 0.9em; margin-top: 8px; }\n    .summary { background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0; }\n    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #7f8c8d; text-align: center; }\n  `;\n\n  let html = `\n    <!DOCTYPE html>\n    <html>\n    <head>\n      <meta charset=\"UTF-8\">\n      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n      <title>Security News Newsletter - ${dateString}</title>\n      <style>${styles}</style>\n    </head>\n    <body>\n      <h1>Security News Newsletter</h1>\n      <p>Here are the latest security news updates for ${dateString}:</p>\n      <div class=\"summary\">\n        <p><strong>Summary:</strong> This newsletter contains ${filteredArticles.length} articles across ${Object.keys(categorizedArticles).length} categories.</p>\n      </div>\n  `;\n\n  Object.keys(categorizedArticles).sort().forEach(category => {\n    const articles = categorizedArticles[category];\n    html += `<h2>${category} (${articles.length})</h2>`;\n    articles.forEach(article => {\n      let formattedDate = \"Date unknown\";\n      if (article.isoDate) {\n        const dt = typeof article.isoDate === 'number'\n          ? new Date(article.isoDate)\n          : new Date(article.isoDate);\n        if (!isNaN(dt.getTime())) {\n          formattedDate = dt.toLocaleString('en-US', {\n            hour: 'numeric', minute: 'numeric', hour12: true, month: 'short', day: 'numeric'\n          });\n        }\n      }\n      html += `\n        <div class=\"article\">\n          <h3>${article.title || \"Untitled\"}</h3>\n          <div class=\"article-content\">${article.content || \"No content available\"}</div>\n          <a href=\"${article.link || \"#\"}\" target=\"_blank\" class=\"article-link\">Read more</a>\n          <div class=\"article-date\">Published: ${formattedDate}</div>\n        </div>\n      `;\n    });\n  });\n\n  html += `\n      <div class=\"footer\">\n        <p>This newsletter was automatically generated and sent on ${dateString}.</p>\n        <p>To unsubscribe, please click <a href=\"{{unsubscribe_link}}\">here</a>.</p>\n      </div>\n    </body>\n    </html>\n  `;\n  return html;\n}\n\nconst newsletterHTML = generateNewsletterHTML();\n\nreturn [{\n  json: {\n    subject: `Security News Newsletter - ${dateString}`,\n    html: newsletterHTML,\n    // to, cc, bcc can be set in the Email node\n  }\n}];"
+      },
+      "id": "92b89d93-a96d-4d68-b286-c70aff869ab5",
+      "name": "Format Security Articles into HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1536,
+        224
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  // 1. grab the raw AI output\n  const raw = item.json.output;\n\n  // 2. extract what's between ```json ... ``` (or fall back to full text)\n  const match = raw.match(/```json\\s*([\\s\\S]*?)```/);\n  const jsonPayload = (match ? match[1] : raw).trim();\n\n  // 3. remove any trailing commas before } or ]\n  const clean = jsonPayload.replace(/,\\s*([\\]}])/g, '$1');\n\n  // 4. parse into an object, with error reporting\n  let data;\n  try {\n    data = JSON.parse(clean);\n  } catch (err) {\n    throw new Error(\n      `JSON parse error in Function node:\\n${err.message}\\n\\nPayload was:\\n${clean}`\n    );\n  }\n\n  // 5. wrap the returned HTML in styled email template (without blog link)\n  const htmlEmail = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>${data.subject}</title>\n  <style>\n    body { font-family: Arial, sans-serif; line-height:1.5; color:#333; background-color:#f7f9fa; margin:0; padding:20px; }\n    .container { max-width:700px; margin:0 auto; background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); overflow:hidden; }\n    .header { background:#2c3e50; color:#fff; padding:20px; text-align:center; }\n    .header h1 { margin:0; font-size:24px; }\n    .content { padding:20px; }\n    h2 { color:#e74c3c; border-bottom:2px solid #e74c3c; padding-bottom:5px; }\n    ul { padding-left:20px; }\n    li { margin-bottom:10px; }\n    a { color:#2980b9; text-decoration:none; }\n    a:hover { text-decoration:underline; }\n    .footer { background:#ecf0f1; text-align:center; padding:10px; font-size:12px; color:#7f8c8d; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>${data.subject}</h1>\n    </div>\n    <div class=\"content\">\n      ${data.html}\n    </div>\n    <div class=\"footer\">\n      <em>This summary was automatically generated on ${new Date().toLocaleDateString('en-US', {\n        year: 'numeric', month: 'long', day: 'numeric'\n      })}.</em>\n    </div>\n  </div>\n</body>\n</html>\n  `.trim();\n\n  // 6. emit subject + styled html\n  return {\n    json: {\n      subject: data.subject,\n      html: htmlEmail,\n    }\n  };\n});"
+      },
+      "id": "791fb8bb-023f-4c70-9a4c-54dfed3826df",
+      "name": "Security Build Final Newsletter HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2128,
+        224
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "tidewaterinfosec@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "96fdf43a-2904-4470-a7d2-9b9bde6a5e40",
+      "name": "Security Send Final Digest Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        2368,
+        224
+      ],
+      "webhookId": "2ffca73d-6ca2-4c61-88ec-3542600d2788",
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "isoDate",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6e9b7914-76fd-4248-a44a-5a5332f79994",
+      "name": "Sort - Security Articles by Date",
+      "type": "n8n-nodes-base.sort",
+      "position": [
+        1328,
+        224
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 📬 Daily Security Newsletter",
+        "height": 580,
+        "width": 2600
+      },
+      "id": "a9d08d3c-b16f-43c8-8aaf-7744cf9ea8fb",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## 📬 Daily AI Newsletter",
+        "height": 580,
+        "width": 2600,
+        "color": 4
+      },
+      "id": "10835e39-0c2e-44bd-883e-5b464e88f0fc",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        16,
+        624
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.rss_url }}",
+        "options": {}
+      },
+      "id": "096704bb-8813-4693-957c-9cba6ddeafd9",
+      "name": "Security RSS Read",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        640,
+        224
+      ],
+      "retryOnFail": true,
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node returns curated cybersecurity RSS feeds\n// You can add, remove, or modify feeds as needed\nreturn [\n  {\n    json: {\n      name: \"Krebs on Security\",\n      website: \"https://krebsonsecurity.com\",\n      rss_url: \"https://krebsonsecurity.com/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"The Hacker News\",\n      website: \"https://thehackernews.com\",\n      rss_url: \"https://feeds.feedburner.com/TheHackersNews\"\n    }\n  },\n  {\n    json: {\n      name: \"Dark Reading\",\n      website: \"https://www.darkreading.com\",\n      rss_url: \"https://www.darkreading.com/rss.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"SANS Internet Storm Center\",\n      website: \"https://isc.sans.edu\",\n      rss_url: \"https://isc.sans.edu/rssfeed_full.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"Cisco Talos Intelligence Blog\",\n      website: \"https://blog.talosintelligence.com\",\n      rss_url: \"https://blog.talosintelligence.com/rss/\"\n    }\n  },\n  {\n    json: {\n      name: \"WeLiveSecurity (ESET)\",\n      website: \"https://www.welivesecurity.com\",\n      rss_url: \"https://feeds.feedburner.com/eset/blog\"\n    }\n  },\n  {\n    json: {\n      name: \"Graham Cluley Security Blog\",\n      website: \"https://grahamcluley.com\",\n      rss_url: \"https://grahamcluley.com/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"Bleeping Computer\",\n      website: \"https://www.bleepingcomputer.com\",\n      rss_url: \"https://www.bleepingcomputer.com/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"CISA Cybersecurity Advisories\",\n      website: \"https://www.cisa.gov/cybersecurity-advisories\",\n      rss_url: \"https://www.cisa.gov/cybersecurity-advisories/all.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"US-CERT Current Activity\",\n      website: \"https://www.cisa.gov\",\n      rss_url: \"https://www.cisa.gov/cybersecurity-advisories/all.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"Google Project Zero\",\n      website: \"https://googleprojectzero.blogspot.com\",\n      rss_url: \"https://googleprojectzero.blogspot.com/feeds/posts/default\"\n    }\n  },\n  {\n    json: {\n      name: \"Rapid7 Blog\",\n      website: \"https://blog.rapid7.com\",\n      rss_url: \"https://blog.rapid7.com/rss/\"\n    }\n  },\n  {\n    json: {\n      name: \"Schneier on Security\",\n      website: \"https://www.schneier.com\",\n      rss_url: \"https://www.schneier.com/feed/atom/\"\n    }\n  },\n  {\n    json: {\n      name: \"Securelist (Kaspersky)\",\n      website: \"https://securelist.com\",\n      rss_url: \"https://securelist.com/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"SecurityWeek\",\n      website: \"https://www.securityweek.com\",\n      rss_url: \"https://www.securityweek.com/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"Threatpost\",\n      website: \"https://threatpost.com\",\n      rss_url: \"https://threatpost.com/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"Volexity\",\n      website: \"https://www.volexity.com/blog/\",\n      rss_url: \"https://www.volexity.com/feed/\"\n    }\n  }\n];"
+      },
+      "id": "08dc7367-2893-402a-9cf7-ec7d3ba1d655",
+      "name": "Fetch Security RSS",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        384,
+        224
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "content": "### Update your email address or distribution list (DL) below\n⬇️",
+        "height": 100,
+        "color": 7
+      },
+      "id": "9e1104de-4b80-46c3-b441-576f3991a41e",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2368,
+        96
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Update your email address or distribution list (DL) below\n⬇️",
+        "height": 100,
+        "color": 7
+      },
+      "id": "8e0f4e77-ca89-490d-9c7a-e92a1e3e238c",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2336,
+        768
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Update the RSS feed URL as needed to fetch content from your preferred source.",
+        "height": 80,
+        "color": 7
+      },
+      "id": "48dd3399-c923-45fd-bb5a-1d0a8e1ffa76",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        304,
+        112
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Update the RSS feed URL as needed to fetch content from your preferred source.",
+        "height": 80,
+        "color": 7
+      },
+      "id": "fea9fbb8-1d13-48d9-a371-7ff25a6db97b",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        288,
+        768
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1760,
+        368
+      ],
+      "id": "61bbb1b8-4553-4a51-b6d8-03de86028469",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1744,
+        1008
+      ],
+      "id": "e77f9567-69a2-48da-8a07-9e70a20fe35e",
+      "name": "OpenAI Chat Model1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// This node returns curated AI/ML RSS feeds with cybersecurity relevance\n// Duplicates from existing security feeds have been removed\nreturn [\n  {\n    json: {\n      name: \"MIT Technology Review - AI\",\n      website: \"https://www.technologyreview.com/topic/artificial-intelligence/\",\n      rss_url: \"https://www.technologyreview.com/topic/artificial-intelligence/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"VentureBeat AI\",\n      website: \"https://venturebeat.com/category/ai/\",\n      rss_url: \"https://venturebeat.com/category/ai/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"TechCrunch AI\",\n      website: \"https://techcrunch.com/category/artificial-intelligence/\",\n      rss_url: \"https://techcrunch.com/category/artificial-intelligence/feed/\"\n    }\n  },\n  {\n    json: {\n      name: \"OpenAI Blog\",\n      website: \"https://openai.com/blog\",\n      rss_url: \"https://openai.com/blog/rss.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"DeepMind Blog\",\n      website: \"https://deepmind.google/blog/\",\n      rss_url: \"https://deepmind.google/blog/rss.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"arXiv - Cryptography & Security\",\n      website: \"https://arxiv.org/list/cs.CR/recent\",\n      rss_url: \"https://arxiv.org/rss/cs.CR\"\n    }\n  },\n  {\n    json: {\n      name: \"arXiv - Machine Learning\",\n      website: \"https://arxiv.org/list/cs.LG/recent\",\n      rss_url: \"https://arxiv.org/rss/cs.LG\"\n    }\n  },\n  {\n    json: {\n      name: \"arXiv - AI\",\n      website: \"https://arxiv.org/list/cs.AI/recent\",\n      rss_url: \"https://arxiv.org/rss/cs.AI\"\n    }\n  },\n  {\n    json: {\n      name: \"AI Alignment Forum\",\n      website: \"https://www.alignmentforum.org\",\n      rss_url: \"https://www.alignmentforum.org/feed.xml\"\n    }\n  },\n  {\n    json: {\n      name: \"LessWrong - AI\",\n      website: \"https://www.lesswrong.com\",\n      rss_url: \"https://www.lesswrong.com/feed.xml\"\n    }\n  }\n];"
+      },
+      "id": "dc8ee633-cd37-479b-ae4e-bfb558cab2ce",
+      "name": "Fetch AI Feeds",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        368,
+        896
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.rss_url }}",
+        "options": {}
+      },
+      "id": "50d219d8-1df6-4880-9168-f976e0f18d3f",
+      "name": "AI RSS Read",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        640,
+        896
+      ],
+      "retryOnFail": true,
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9aec0a09-4b6f-4fca-98e6-789abd5fdc51",
+              "name": "title",
+              "type": "string",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "id": "56277e54-31a0-4804-ad23-c9ee6d244641",
+              "name": "content",
+              "type": "string",
+              "value": "={{ $json.contentSnippet }}"
+            },
+            {
+              "id": "a3586a80-588e-42d1-9780-370a956ddf6b",
+              "name": "link",
+              "type": "string",
+              "value": "={{ $json.link }}"
+            },
+            {
+              "id": "58f01618-8014-4685-9192-d15d596ffcd9",
+              "name": "isoDate",
+              "type": "number",
+              "value": "={{ new Date($json.isoDate).getTime() }}"
+            },
+            {
+              "id": "716bb078-8df3-4d96-8a1b-4aec4f8cf206",
+              "name": "categories",
+              "type": "array",
+              "value": "={{ $json.categories }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "53152f8c-9343-4191-a52f-0f928a6cbe7d",
+      "name": "Normalize Article AI Metadata",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        864,
+        896
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "e7cf09fb-af35-495d-a840-341f8d0ddcd8",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $json.isoDate }}",
+              "rightValue": "={{ Date.now() - 24 * 60 * 60 * 1000 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4bbe5bf-ce99-486f-9577-baf8253492c3",
+      "name": "Filter Recent AI Articles (24h)",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        1088,
+        896
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "isoDate",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f6ca231f-665d-4202-9302-60d410ca95a0",
+      "name": "Sort - AI Articles by Date",
+      "type": "n8n-nodes-base.sort",
+      "position": [
+        1296,
+        896
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dynamic n8n Newsletter Generator - Function Node\n// This code processes security news articles from a previous node and formats them into an HTML email\n\n// Get items from the previous node\nlet newsItems = [];\n\ntry {\n  if ($input && $input.all().length > 0) {\n    const inputItems = $input.all();\n    if (inputItems.length === 1 && Array.isArray(inputItems[0].json)) {\n      newsItems = inputItems[0].json;\n    } else {\n      newsItems = inputItems.map(item => item.json);\n    }\n  } else if (typeof items !== 'undefined' && items.length > 0) {\n    if (items.length === 1 && Array.isArray(items[0].json)) {\n      newsItems = items[0].json;\n    } else {\n      newsItems = items.map(item => item.json);\n    }\n  }\n  console.log(`Successfully processed input, found ${newsItems.length} news items`);\n} catch (error) {\n  console.log(`Error processing input: ${error.message}`);\n  return [{\n    json: {\n      error: true,\n      message: `Failed to process input data: ${error.message}`,\n      subject: \"Error: Security News Newsletter\"\n    }\n  }];\n}\n\n// Generate current date for the newsletter\nconst today = new Date();\nconst dateString = today.toLocaleDateString('en-US', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\n// Optional: Filter for recent articles only\nconst hoursToInclude = 24;\nlet filteredArticles = newsItems;\nif (hoursToInclude > 0) {\n  const cutoffTime = Date.now() - (hoursToInclude * 60 * 60 * 1000);\n  filteredArticles = newsItems.filter(article => {\n    const articleDate = article.isoDate\n      ? (typeof article.isoDate === 'number'\n         ? article.isoDate\n         : new Date(article.isoDate).getTime())\n      : 0;\n    return articleDate >= cutoffTime;\n  });\n  console.log(`Filtered to ${filteredArticles.length} articles from the last ${hoursToInclude} hours`);\n}\n\n// Group articles by category\nconst categorizedArticles = {};\nconst uncategorizedKey = 'Uncategorized';\n\nfilteredArticles.forEach(article => {\n  if (!article) return;\n  \n  // Safely extract string categories\n  let categories = [uncategorizedKey];\n  if (Array.isArray(article.categories)) {\n    categories = article.categories\n      .map(cat => {\n        if (typeof cat === 'string') return cat;\n        if (cat && typeof cat.name === 'string') return cat.name;\n        return '';\n      })\n      .map(str => str.trim())\n      .filter(str => str.length > 0);\n    if (categories.length === 0) categories = [uncategorizedKey];\n  } else if (typeof article.categories === 'string' && article.categories.trim()) {\n    categories = [article.categories.trim()];\n  }\n\n  categories.forEach(category => {\n    const name = category || uncategorizedKey;\n    if (!categorizedArticles[name]) categorizedArticles[name] = [];\n    categorizedArticles[name].push(article);\n  });\n});\n\n// Generate HTML for the newsletter\nfunction generateNewsletterHTML() {\n  const styles = `\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }\n    h1 { color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; }\n    h2 { color: #c0392b; margin-top: 30px; border-left: 4px solid #e74c3c; padding-left: 10px; }\n    .article { margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n    .article h3 { margin-top: 0; color: #34495e; }\n    .article-content { color: #555; margin-bottom: 10px; }\n    .article-link { color: #e74c3c; text-decoration: none; font-weight: bold; }\n    .article-link:hover { text-decoration: underline; }\n    .article-date { color: #7f8c8d; font-size: 0.9em; margin-top: 8px; }\n    .summary { background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin: 20px 0; }\n    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9em; color: #7f8c8d; text-align: center; }\n  `;\n\n  let html = `\n    <!DOCTYPE html>\n    <html>\n    <head>\n      <meta charset=\"UTF-8\">\n      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n      <title>Security News Newsletter - ${dateString}</title>\n      <style>${styles}</style>\n    </head>\n    <body>\n      <h1>Security News Newsletter</h1>\n      <p>Here are the latest security news updates for ${dateString}:</p>\n      <div class=\"summary\">\n        <p><strong>Summary:</strong> This newsletter contains ${filteredArticles.length} articles across ${Object.keys(categorizedArticles).length} categories.</p>\n      </div>\n  `;\n\n  Object.keys(categorizedArticles).sort().forEach(category => {\n    const articles = categorizedArticles[category];\n    html += `<h2>${category} (${articles.length})</h2>`;\n    articles.forEach(article => {\n      let formattedDate = \"Date unknown\";\n      if (article.isoDate) {\n        const dt = typeof article.isoDate === 'number'\n          ? new Date(article.isoDate)\n          : new Date(article.isoDate);\n        if (!isNaN(dt.getTime())) {\n          formattedDate = dt.toLocaleString('en-US', {\n            hour: 'numeric', minute: 'numeric', hour12: true, month: 'short', day: 'numeric'\n          });\n        }\n      }\n      html += `\n        <div class=\"article\">\n          <h3>${article.title || \"Untitled\"}</h3>\n          <div class=\"article-content\">${article.content || \"No content available\"}</div>\n          <a href=\"${article.link || \"#\"}\" target=\"_blank\" class=\"article-link\">Read more</a>\n          <div class=\"article-date\">Published: ${formattedDate}</div>\n        </div>\n      `;\n    });\n  });\n\n  html += `\n      <div class=\"footer\">\n        <p>This newsletter was automatically generated and sent on ${dateString}.</p>\n        <p>To unsubscribe, please click <a href=\"{{unsubscribe_link}}\">here</a>.</p>\n      </div>\n    </body>\n    </html>\n  `;\n  return html;\n}\n\nconst newsletterHTML = generateNewsletterHTML();\n\nreturn [{\n  json: {\n    subject: `Security News Newsletter - ${dateString}`,\n    html: newsletterHTML,\n    // to, cc, bcc can be set in the Email node\n  }\n}];"
+      },
+      "id": "787733bc-6ec6-4f4a-b383-9a8831565c4a",
+      "name": "Format AI Articles into HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1520,
+        896
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.subject }}\n{{ $json.html }}",
+        "options": {
+          "systemMessage": "=### **Identity and Purpose**\n\nYou are an expert in both artificial intelligence and cybersecurity. Your task is to create a daily news letter for emerging AI technology, especially paying attention to the intersection of AI and security. Complete the task efficiently without compromising quality or accuracy.\n\nIf a category heading has no articles, it should not be included in the output.\n\n#### **Tasks:**\n1. Parse the HTML and extract articles.\n2. Remove duplicates based on title similarity and URL.\n3. Categorize content into the following categories (only include categories with articles):\n   * AI Security Vulnerabilities (prompt injection, jailbreaking, adversarial attacks, model extraction)\n   * LLM Safety & Red Teaming (alignment, safety research, model security)\n   * AI-Powered Threats (deepfakes, AI-generated malware, automated attacks, social engineering)\n   * AI Security Tools & Defense (AI-powered detection, security automation, defensive AI)\n   * AI Governance & Policy (AI regulations, security standards, compliance, ethics with security implications)\n   * Machine Learning Security (adversarial ML, data poisoning, model backdoors, federated learning security)\n   * AI in Penetration Testing (offensive AI tools, AI-assisted hacking, automation)\n   * New AI models, especially high performing local models\n4. Summarize each article in under 2 lines, focusing on the security implications and actionable insights.\n5. Dynamically identify and list the top 5 most impactful AI news based on:\n   - Any exploitability or active threats\n   - New AI technologies with cybersecurity impact\n   - Impact on security posture\n   - Novel attack techniques or vulnerabilities\n   - Significant policy/regulatory changes\n   If fewer than 5 critical alerts are available, include only those and adjust the section title accordingly (e.g., 'Top 3 Critical AI Security Alerts').\n6. Format each article as:\n```html\n   <li><strong>Article Title</strong> — Summary focusing on security implications and key takeaways… <a href=\"URL\">Read more</a></li>\n```\n7. Output HTML structure with headers for Top 5 Critical Alerts and each populated category.\n8. Add timestamp footer:\n```html\n   <p><em>This AI security intelligence digest was compiled on [Month Day, Year].</em></p>\n```\n\n#### **Output (JSON only):**\n```json\n{\n  \"subject\": \"AI Security Intelligence Digest - [Month Day, Year]\",\n  \"html\": \"<h2>🚨 Top 5 Critical AI Security Alerts</h2><ul>…</ul><h2>AI Security Vulnerabilities</h2><ul>…</ul>…<p><em>This AI security intelligence digest was compiled on [Month Day, Year].</em></p>\"\n}\n```\n\n#### **Quality Standards:**\n- Prioritize articles at the intersection of AI and cybersecurity\n- Focus on actionable intelligence for security professionals\n- Highlight novel attack techniques, vulnerabilities, and defensive strategies\n- Include relevant CVEs, proof-of-concepts, and security research\n- Filter out pure AI hype without security relevance"
+        }
+      },
+      "id": "438dec06-44d5-4885-a41d-a58a3e1128c1",
+      "name": "AI Agent - AI News",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1744,
+        784
+      ],
+      "retryOnFail": true,
+      "typeVersion": 1.9
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.subject }}\n{{ $json.html }}",
+        "options": {
+          "systemMessage": "=### **Identity and Purpose**\n\nYou are a cybersecurity and threat intelligence expert, your role is to create a cyber security threat intelligence daily digest that does not compromise quality or accuracy.\n\n#### **Inputs:**\n\n* Raw newsletter subject: `{{ $json.subject }}`\n* Raw newsletter HTML body: `{{ $json.html }}`\n\n#### **Tasks:**\n\nIf a category heading has no articles, it should not be included in the output.\n\n1. Parse the provided HTML.\n2. Remove duplicate articles based on title, summary, or URL.\n3. Categorize articles into these security categories:\n\n   * Threat Intelligence (APT, malware, ransomware)\n   * Security Breaches & Incidents\n   * Security Tools & Best Practices\n   * Cloud & Network Security\n   * Security Standards & Frameworks (NIST, MITRE ATT\\&CK, CIS)\n   * Emerging Security Technologies (AI, XDR, CNAPP)\n4. Summarize each article in 1–2 lines.\n5. Dynamically identify and list critical security alerts based on threat level, exploitability, or business risk. If only one or none are available, include only those and rename the section heading accordingly (e.g., 'Critical Security Alert').\n6. Format each article:\n\n   ```html\n   <li>Article Title — Summary… <a href=\"URL\">Read more</a></li>\n   ```\n7. Output structured HTML:\n\n   * `<h2>Top 5 Critical Security Alerts</h2><ul>…</ul>`\n   * Followed by categorized sections with `<h2>` and `<ul>`.\n8. Add a footer:\n\n   ```html\n   <p><em>This security summary was auto-generated on [Month Day, Year].</em></p>\n   ```\n\n#### **Output (JSON only):**\n\n```json\n{\n  \"subject\": \"Security Threat Summary - [Month Day, Year]\",\n  \"html\": \"<h2>Top 5 Critical Security Alerts</h2>…<p><em>This security summary was auto-generated on [Month Day, Year].</em></p>\"\n}\n```"
+        }
+      },
+      "id": "9c5cc567-9eb6-4c01-b01a-d15ecdff9730",
+      "name": "AI Agent - Security News",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1760,
+        128
+      ],
+      "retryOnFail": true,
+      "typeVersion": 1.9
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  // 1. grab the raw AI output\n  const raw = item.json.output;\n\n  // 2. extract what's between ```json ... ``` (or fall back to full text)\n  const match = raw.match(/```json\\s*([\\s\\S]*?)```/);\n  const jsonPayload = (match ? match[1] : raw).trim();\n\n  // 3. remove any trailing commas before } or ]\n  const clean = jsonPayload.replace(/,\\s*([\\]}])/g, '$1');\n\n  // 4. parse into an object, with error reporting\n  let data;\n  try {\n    data = JSON.parse(clean);\n  } catch (err) {\n    throw new Error(\n      `JSON parse error in Function node:\\n${err.message}\\n\\nPayload was:\\n${clean}`\n    );\n  }\n\n  // 5. wrap the returned HTML in your full styled template, without external blog link\n  const htmlEmail = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>${data.subject}</title>\n  <style>\n    body { font-family: Arial, sans-serif; line-height:1.5; color:#333; background-color:#f7f9fa; margin:0; padding:20px; }\n    .container { max-width:700px; margin:0 auto; background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); overflow:hidden; }\n    .header { background:#2c3e50; color:#fff; padding:20px; text-align:center; }\n    .header h1 { margin:0; font-size:24px; }\n    .content { padding:20px; }\n    h2 { color:#e74c3c; border-bottom:2px solid #e74c3c; padding-bottom:5px; }\n    ul { padding-left:20px; }\n    li { margin-bottom:10px; }\n    a { color:#2980b9; text-decoration:none; }\n    a:hover { text-decoration:underline; }\n    .footer { background:#ecf0f1; text-align:center; padding:10px; font-size:12px; color:#7f8c8d; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>${data.subject}</h1>\n    </div>\n    <div class=\"content\">\n      ${data.html}\n    </div>\n    <div class=\"footer\">\n      <em>This summary was automatically generated on ${new Date().toLocaleDateString('en-US', {\n        year: 'numeric', month: 'long', day: 'numeric'\n      })}.</em>\n    </div>\n  </div>\n</body>\n</html>\n  `.trim();\n\n  // 6. emit subject + styled html\n  return {\n    json: {\n      subject: data.subject,\n      html: htmlEmail,\n    }\n  };\n});"
+      },
+      "id": "ebd15670-fd2c-4692-a9d5-85b6cd58fc66",
+      "name": "AI Build Final Newsletter HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2128,
+        896
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "tidewaterinfosec@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "c82fc969-f30b-4886-b242-aac7a9d4f7a9",
+      "name": "AI Send Final Digest Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        2336,
+        896
+      ],
+      "webhookId": "0e8133d5-e700-4bb9-8ef0-6c86f7ed4a59",
+      "typeVersion": 2.1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Security RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Normalize Article Security Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Security RSS": {
+      "main": [
+        [
+          {
+            "node": "Security RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Daily Digest": {
+      "main": [
+        [
+          {
+            "node": "Fetch Security RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch AI Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort - Security Articles by Date": {
+      "main": [
+        [
+          {
+            "node": "Format Security Articles into HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Security Articles into HTML": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Security News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Article Security Metadata": {
+      "main": [
+        [
+          {
+            "node": "Filter Recent Security Articles (24h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Security Build Final Newsletter HTML": {
+      "main": [
+        [
+          {
+            "node": "Security Send Final Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Recent Security Articles (24h)": {
+      "main": [
+        [
+          {
+            "node": "Sort - Security Articles by Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Security News",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - AI News",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AI Feeds": {
+      "main": [
+        [
+          {
+            "node": "AI RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Normalize Article AI Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Article AI Metadata": {
+      "main": [
+        [
+          {
+            "node": "Filter Recent AI Articles (24h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Recent AI Articles (24h)": {
+      "main": [
+        [
+          {
+            "node": "Sort - AI Articles by Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort - AI Articles by Date": {
+      "main": [
+        [
+          {
+            "node": "Format AI Articles into HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format AI Articles into HTML": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - AI News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - AI News": {
+      "main": [
+        [
+          {
+            "node": "AI Build Final Newsletter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Security News": {
+      "main": [
+        [
+          {
+            "node": "Security Build Final Newsletter HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Build Final Newsletter HTML": {
+      "main": [
+        [
+          {
+            "node": "AI Send Final Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "1db69eae-d098-44ae-abe0-8cd2f112e500",
+  "meta": {
+    "instanceId": "d600756f141b274a3143d44fd5e3fd32a6e9353753558b9a411b71cc9d2438a7"
+  },
+  "id": "9UkIwXM-Q2OnQjK7BSFcw",
+  "tags": []
+}

@@ -1,0 +1,1914 @@
+{
+  "name": "Scan and Analyze - testing",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d47bffc9-8842-4fe7-b558-a18aadb1ab6d",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4928,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "tool",
+              "stringValue": "nuclei_scan"
+            },
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "id": "cc27f59c-e205-4e97-9cae-bfdbfcf53310",
+      "name": "Set Target Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3824,
+        -96
+      ],
+      "notes": "Configure scan target and parameters"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-security-server:3000/scans/start",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool",
+              "value": "={{ $json.tool }}"
+            },
+            {
+              "name": "target",
+              "value": "={{ $json.target }}"
+            },
+            {
+              "name": "arguments",
+              "value": "={{ {\"severity\": $json.severity} }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "0227d2d3-0106-4b43-bc6f-abbc567e125a",
+      "name": "Start Async Scan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -3600,
+        -104
+      ],
+      "notes": "Starts scan and returns immediately with job_id"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "b6340721-94cf-4c8b-a25b-afe199b7647f",
+      "name": "Save Job Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3376,
+        -104
+      ],
+      "notes": "Store job_id and retry counter"
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "5f0a340f-6e9a-4be5-b434-dc255c2e7b79",
+      "name": "Wait 10 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        -104
+      ],
+      "webhookId": "wait-webhook-1",
+      "notes": "Poll interval - adjust based on expected scan duration"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $json.job_id }}/status",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "feeb921e-ac7f-4545-9f8b-5b7435604294",
+      "name": "Check Scan Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2928,
+        -176
+      ],
+      "notes": "Get current scan status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9553394e-c0aa-4ab3-b91a-760f92597022",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f357f92f-619d-4a96-a1ac-c7564e880802",
+      "name": "Is Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2704,
+        -176
+      ],
+      "notes": "Check if scan finished successfully"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $('Save Job Info').item.json.job_id }}/results",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "0c2da56b-1e16-427d-9093-84c3381fc595",
+      "name": "Get Scan Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2480,
+        -320
+      ],
+      "notes": "Retrieve full scan results"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "eabde6e9-6e6e-4119-9a50-8d01592bc47c",
+              "leftValue": "error",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e54a34ee-d3dc-4bdd-b8a8-f3be40542633",
+      "name": "Is Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2480,
+        -80
+      ],
+      "notes": "Check if scan encountered error"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "6389a3dc-fbc4-4dc3-8bef-c4f11f36e311",
+      "name": "Handle Failure",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        -128
+      ],
+      "notes": "Log error and stop"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "0d80ce5d-319c-4092-90d6-a142bb3bb3ac",
+      "name": "Increment Retry",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        88
+      ],
+      "notes": "Increment counter and loop back"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify($json.results, null, 2) }}",
+        "options": {}
+      },
+      "id": "dfaff5c5-9c26-4307-8cae-022d616484d7",
+      "name": "Format Results",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        -320
+      ],
+      "notes": "Format for AI agent"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ai-analysis-1",
+              "name": "scan_summary",
+              "type": "string",
+              "value": "=Tool: {{ $('Save Job Info').item.json.tool }}\nTarget: {{ $('Save Job Info').item.json.target }}\nDuration: {{ $json.duration_seconds }}s\nStatus: {{ $json.status }}\n\n=== Scan Output ===\n  {{ $json.results.findings.map((f, i) => {\n    return `\n  Finding ${i + 1}: ${f.info?.name || f['template-id']}\n    Severity: ${f.info?.severity || 'unknown'}\n    Type: ${f.type}\n    Matched at: ${f['matched-at'] || f.host}\n    Description: ${f.info?.description || 'No description'}\n    ${f.info?.impact ? 'Impact: ' + f.info.impact : ''}\n    ${f['extracted-results']?.length ? 'Extracted: ' + f['extracted-results'].join(', ') : ''}\n  `;\n  }).join('\\n---\\n') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9c54444f-f918-4fe6-b987-0f9fd2c74962",
+      "name": "Prepare AI Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -2032,
+        -320
+      ],
+      "notes": "Format data for AI agent"
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1376,
+        880
+      ],
+      "id": "58a90b0f-9df0-4793-9b47-23f9476a89c9",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-security-server:3000/scans/start",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool",
+              "value": "={{ $json.tool }}"
+            },
+            {
+              "name": "target",
+              "value": "={{ $json.target }}"
+            },
+            {
+              "name": "arguments",
+              "value": "={{ {\"severity\": $json.severity} }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "9eb6e8d5-b1f9-4d99-b815-96dc906f2a7b",
+      "name": "Start Async Scan1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -3600,
+        520
+      ],
+      "notes": "Starts scan and returns immediately with job_id"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "70d54835-aba8-4aee-aa8b-e00daf7bcb3b",
+      "name": "Save Job Info1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3376,
+        520
+      ],
+      "notes": "Store job_id and retry counter"
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "c23eb414-0ef8-484d-a098-0497e54467f2",
+      "name": "Wait 10 Seconds1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        520
+      ],
+      "webhookId": "wait-webhook-1",
+      "notes": "Poll interval - adjust based on expected scan duration"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $json.job_id }}/status",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "b3eef5d0-b001-492e-a254-7b02f53e7a88",
+      "name": "Check Scan Status1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2928,
+        448
+      ],
+      "notes": "Get current scan status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9553394e-c0aa-4ab3-b91a-760f92597022",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "009b9807-fc37-4a59-840a-3497c78b60d8",
+      "name": "Is Completed?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2704,
+        448
+      ],
+      "notes": "Check if scan finished successfully"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $('Save Job Info1').item.json.job_id }}/results",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "997edc82-9c94-4a1b-bfec-6fc6dfc14eb6",
+      "name": "Get Scan Results1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2480,
+        304
+      ],
+      "notes": "Retrieve full scan results"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "eabde6e9-6e6e-4119-9a50-8d01592bc47c",
+              "leftValue": "error",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "75068ff6-c70b-4777-b4ea-fc4804f21f5e",
+      "name": "Is Failed?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2480,
+        544
+      ],
+      "notes": "Check if scan encountered error"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "1b0ae8a6-44a5-4d8d-8b15-50249c063efc",
+      "name": "Handle Failure1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        496
+      ],
+      "notes": "Log error and stop"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "889fdf95-d470-4857-b0d1-24828b62ba81",
+      "name": "Increment Retry1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        712
+      ],
+      "notes": "Increment counter and loop back"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify($json.results, null, 2) }}",
+        "options": {}
+      },
+      "id": "4948d28e-9200-49f9-9c6a-e8252fc7fee5",
+      "name": "Format Results1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        304
+      ],
+      "notes": "Format for AI agent"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ai-analysis-1",
+              "name": "scan_summary",
+              "type": "string",
+              "value": "=  =Tool: gobuster_scan\n  Target: {{ $('Save Job Info1').item.json.target }}\n  Duration: {{ $json.duration_seconds }}s\n  Status: {{ $json.status }}\n\n  === SUMMARY ===\n  Total Paths Discovered: {{ $json.results.findings_count }}\n  {{\n    (() => {\n      const findings = $json.results.findings || [];\n      const statuses = {};\n      findings.forEach(f => {\n        statuses[f.status_code] = (statuses[f.status_code] || 0) + 1;\n      });\n      return Object.entries(statuses)\n        .sort((a, b) => a[0] - b[0])\n        .map(([code, count]) => `  ${code}: ${count} paths`)\n        .join('\\n');\n    })()\n  }}\n\n  === CRITICAL FINDINGS ===\n  {{\n    $json.results.findings\n      .filter(f => f.status_code === 403 || f.status_code === 401 ||\n                   (f.path || '').toLowerCase().match(/admin|login|config|backup|api/))\n      .map(f => `⚠️  /${f.path} (${f.status_code})`)\n      .join('\\n') || 'No critical paths found'\n  }}\n\n  === ALL DISCOVERED PATHS ===\n  {{ $json.results.findings.map((f, i) =>\n    `${i + 1}. /${f.path} - Status ${f.status_code} (${f.size} bytes)`\n  ).join('\\n') }}\n\n  === DETAILED JSON ===\n  {{ JSON.stringify($json.results.findings, null, 2) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "062fed13-f88b-4612-9dc9-8d8fedea7d25",
+      "name": "Prepare AI Input1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -2032,
+        304
+      ],
+      "notes": "Format data for AI agent"
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "target",
+              "stringValue": "={{ $json.target }}"
+            },
+            {
+              "name": "tool",
+              "stringValue": "gobuster_scan"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "31578313-30d9-47b6-945f-a4b07dfc9a96",
+      "name": "Set Target Config1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3824,
+        520
+      ],
+      "notes": "Configure scan target and parameters"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a492305e-1ebc-4080-a2af-92e98d976f60",
+              "name": "target",
+              "value": "ginandjuice.shop",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4704,
+        784
+      ],
+      "id": "62776217-daf6-442b-ba43-ff2cd597e3a5",
+      "name": "Target Domain"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-security-server:3000/scans/start",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool",
+              "value": "={{ $json.tool }}"
+            },
+            {
+              "name": "target",
+              "value": "={{ $json.target }}"
+            },
+            {
+              "name": "arguments",
+              "value": "={{ {\"severity\": $json.severity} }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "daf76016-6084-4085-b4a1-64f7ff8dcada",
+      "name": "Start Async Scan2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -3600,
+        1144
+      ],
+      "notes": "Starts scan and returns immediately with job_id"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e835ebd7-b40e-42a5-a87a-6b7a7f46a323",
+      "name": "Save Job Info2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3376,
+        1144
+      ],
+      "notes": "Store job_id and retry counter"
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "8ef41f5f-66cb-49fa-88b9-4d9e69ae430c",
+      "name": "Wait 10 Seconds2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        1144
+      ],
+      "webhookId": "wait-webhook-1",
+      "notes": "Poll interval - adjust based on expected scan duration"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $json.job_id }}/status",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "1dccde5d-aa8d-46a4-ab28-c4fd73dd9b35",
+      "name": "Check Scan Status2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2928,
+        1072
+      ],
+      "notes": "Get current scan status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9553394e-c0aa-4ab3-b91a-760f92597022",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a6aa7366-a5e8-4e14-bcb6-5b1b9f23ee9c",
+      "name": "Is Completed?2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2704,
+        1072
+      ],
+      "notes": "Check if scan finished successfully"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $('Save Job Info2').item.json.job_id }}/results",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "83aef67a-3fca-49bd-8849-46691f79e3da",
+      "name": "Get Scan Results2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2480,
+        928
+      ],
+      "notes": "Retrieve full scan results"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "eabde6e9-6e6e-4119-9a50-8d01592bc47c",
+              "leftValue": "error",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "29ba47fb-2d68-4147-ab5e-44ebcd2a6a4f",
+      "name": "Is Failed?2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2480,
+        1168
+      ],
+      "notes": "Check if scan encountered error"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "115ee116-5c58-4160-b0c2-063b64884bb9",
+      "name": "Handle Failure2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        1120
+      ],
+      "notes": "Log error and stop"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f8d1d5c6-bb92-4e62-8514-fe468ca882af",
+      "name": "Increment Retry2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        1336
+      ],
+      "notes": "Increment counter and loop back"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify($json.results, null, 2) }}",
+        "options": {}
+      },
+      "id": "ca0dd55a-3b7e-4b9b-9e0a-86c4af146112",
+      "name": "Format Results2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        928
+      ],
+      "notes": "Format for AI agent"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ai-analysis-1",
+              "name": "scan_summary",
+              "type": "string",
+              "value": "=  Tool: gospider_scan\n  Target: {{ $('Save Job Info2').item.json.target }}\n  Duration: {{ $json.results.duration_seconds }}s\n  Status: completed\n\n  === SCAN SUMMARY ===\n  Total Findings: {{ $json.results.findings_count }}\n  Unique URLs: {{ $json.results.unique_urls }}\n\n  Breakdown by Type:\n    • URLs: {{ $json.results.categorized.urls_count }}\n    • Forms/Links: {{ $json.results.categorized.forms_count }}\n    • JavaScript Files: {{ $json.results.categorized.js_count }}\n    • Linkfinder Results: {{ $json.results.categorized.linkfinder_count }}\n    • Subdomains: {{ $json.results.categorized.subdomains_count }}\n    • AWS Resources: {{ $json.results.categorized.aws_count }}\n    • Other: {{ $json.results.categorized.other_count }}\n\n  {{ $json.results.categorized.js_count > 0 ? '=== JAVASCRIPT FILES (' + $json.results.categorized.js_count + ') ===\\n' + $json.results.findings.filter(f => f.type === 'javascript').map((f, i) => (i + 1) + '. ' + f.output + (f.source ? '\\n   Source: ' + f.source : '')).join('\\n') + '\\n' : '' }}\n  {{ $json.results.categorized.forms_count > 0 ? '=== DISCOVERED FORMS & LINKS (' + $json.results.categorized.forms_count + ') ===\\n' + $json.results.findings.filter(f => f.type === 'form').map((f, i) => (i + 1) + '. ' + f.output).join('\\n') + '\\n' : '' }}\n  {{ $json.results.categorized.linkfinder_count > 0 ? '=== LINKFINDER RESULTS (' + $json.results.categorized.linkfinder_count + ') ===\\n(Endpoints/paths extracted from JavaScript files)\\n\\n' + $json.results.findings.filter(f => f.type === 'linkfinder').map((f, i) => (i + 1) + '. ' + f.output + (f.source ? '\\n   └─ Found in: ' + f.source : '')).join('\\n') + '\\n' : '' }}\n  {{ $json.results.categorized.urls_count > 0 ? '=== DISCOVERED URLS (' + $json.results.categorized.urls_count + ') ===\\n' + $json.results.findings.filter(f => f.type === 'url').map((f, i) => (i + 1) + '. ' + f.output + (f.source ? '\\n   Source: ' + f.source : '')).join('\\n') + '\\n' : '' }}\n  {{ $json.results.categorized.subdomains_count > 0 ? '=== DISCOVERED SUBDOMAINS (' + $json.results.categorized.subdomains_count + ') ===\\n' + $json.results.findings.filter(f => f.type === 'subdomain').map((f, i) => (i + 1) + '. ' + f.output).join('\\n') + '\\n' : '' }}\n  {{ $json.results.categorized.aws_count > 0 ? '=== AWS RESOURCES (' + $json.results.categorized.aws_count + ') ===\\n' + $json.results.findings.filter(f => f.type === 'aws').map((f, i) => (i + 1) + '. ' + f.output).join('\\n') + '\\n' : '' }}\n\n  === FULL JSON DATA ===\n  {{ JSON.stringify($json.results.findings, null, 2) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "da06a85a-1917-4e07-a30f-a2820ffb9a7d",
+      "name": "Prepare AI Input2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -2032,
+        928
+      ],
+      "notes": "Format data for AI agent"
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "target",
+              "stringValue": "={{ $json.target }}"
+            },
+            {
+              "name": "tool",
+              "stringValue": "gospider_scan"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "043deed1-b677-403f-8861-a4ca79f6387f",
+      "name": "Set Target Config2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3824,
+        1144
+      ],
+      "notes": "Configure scan target and parameters"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "71a845be-7c33-4777-9264-a9b31c8c2e16",
+              "name": "target",
+              "value": "=https://{{ $json.target }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4048,
+        520
+      ],
+      "id": "64d75cad-4cdb-4239-bfdb-4df387ed6746",
+      "name": "Prepend HTTPS"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "71a845be-7c33-4777-9264-a9b31c8c2e16",
+              "name": "target",
+              "value": "=https://{{ $json.target }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4048,
+        1144
+      ],
+      "id": "099b209d-cfe2-4959-95cc-4402515664e8",
+      "name": "Prepend HTTPS1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-security-server:3000/scans/start",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool",
+              "value": "={{ $json.tool }}"
+            },
+            {
+              "name": "target",
+              "value": "={{ $json.target }}"
+            },
+            {
+              "name": "arguments",
+              "value": "={{ {\"severity\": $json.severity} }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "7a2114dc-1bd4-4772-a706-7a72559ef8f7",
+      "name": "Start Async Scan3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -3600,
+        1776
+      ],
+      "notes": "Starts scan and returns immediately with job_id"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "0fd2ab7f-0c18-4176-8ce0-149109615593",
+      "name": "Save Job Info3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3376,
+        1776
+      ],
+      "notes": "Store job_id and retry counter"
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "d853ad15-e89a-4b06-9760-518a345e4d91",
+      "name": "Wait 10 Seconds3",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        1768
+      ],
+      "webhookId": "wait-webhook-1",
+      "notes": "Poll interval - adjust based on expected scan duration"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $json.job_id }}/status",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "6c8f761e-7d25-4b8c-97fa-42e4a07bdb42",
+      "name": "Check Scan Status3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2928,
+        1696
+      ],
+      "notes": "Get current scan status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9553394e-c0aa-4ab3-b91a-760f92597022",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6b4e8609-7034-49b7-ade6-ea0c3ca298c7",
+      "name": "Is Completed?3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2704,
+        1696
+      ],
+      "notes": "Check if scan finished successfully"
+    },
+    {
+      "parameters": {
+        "url": "=http://mcp-security-server:3000/scans/{{ $('Save Job Info3').item.json.job_id }}/results",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "c0cf16e8-b3f7-4841-b043-b1d778681448",
+      "name": "Get Scan Results3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2480,
+        1552
+      ],
+      "notes": "Retrieve full scan results"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "eabde6e9-6e6e-4119-9a50-8d01592bc47c",
+              "leftValue": "error",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "957ed6a2-f521-4c9e-88fc-6c43c0c572f3",
+      "name": "Is Failed?3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2480,
+        1792
+      ],
+      "notes": "Check if scan encountered error"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e23439ba-be97-42af-882e-2fd40637605c",
+      "name": "Handle Failure3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        1744
+      ],
+      "notes": "Log error and stop"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "628ae211-986d-4538-9f61-8327692ed776",
+      "name": "Increment Retry3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        1960
+      ],
+      "notes": "Increment counter and loop back"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify($json.results, null, 2) }}",
+        "options": {}
+      },
+      "id": "91ba5fb9-a2c0-4619-836f-8b0c9aa0bbf4",
+      "name": "Format Results3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        1552
+      ],
+      "notes": "Format for AI agent"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ai-analysis-1",
+              "name": "scan_summary",
+              "type": "string",
+              "value": "=Tool: nikto_scan\n  Target: {{ $('Save Job Info3').item.json.target }}\n  Host: {{ $json.results.findings[0]?.host || 'N/A' }}\n  IP: {{ $json.results.findings[0]?.ip || 'N/A' }}\n  Port: {{ $json.results.findings[0]?.port || 'N/A' }}\n  Duration: {{ $json.results.duration_seconds }}s\n  Status: {{ $json.status }}\n\n  === SCAN SUMMARY ===\n  Total Vulnerabilities Found: {{ $json.results.vulnerabilities_count }}\n\n  === VULNERABILITIES ===\n  {{ $json.results.vulnerabilities.map((v, i) =>\n    `${i + 1}. [ID: ${v.id}] ${v.method} ${v.url || '/'}\\n   ${v.msg}${v.references ? '\\n   Reference: ' + v.references : ''}`\n  ).join('\\n\\n') }}\n\n  === SSL/TLS INFORMATION ===\n  {{ $json.results.output.match(/\\+ SSL Info:.*?(?=\\n\\+)/s)?.[0] || 'No SSL information available' }}\n\n  === SCAN DETAILS ===\n  {{ $json.results.output.split('\\n').filter(line => line.startsWith('+ Target')).join('\\n') }}\n\n  === FULL JSON DATA ===\n  {{ JSON.stringify($json.results.vulnerabilities, null, 2) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6a6359e3-c2e2-431d-9bc9-b97f9f96299c",
+      "name": "Prepare AI Input3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -2032,
+        1552
+      ],
+      "notes": "Format data for AI agent"
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "target",
+              "stringValue": "={{ $json.target }}"
+            },
+            {
+              "name": "tool",
+              "stringValue": "nikto_scan"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fbc003bb-7f72-4e38-a847-88315d9f6212",
+      "name": "Set Target Config3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -3824,
+        1776
+      ],
+      "notes": "Configure scan target and parameters"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "71a845be-7c33-4777-9264-a9b31c8c2e16",
+              "name": "target",
+              "value": "=https://{{ $json.target }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4048,
+        1768
+      ],
+      "id": "0f0a6b67-29e5-41fb-adb0-6efeda760757",
+      "name": "Prepend HTTPS2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1168,
+        880
+      ],
+      "id": "1afbe2e8-e88c-4c1e-a791-51f13565394d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {
+          "webSearch": {
+            "searchContextSize": "medium"
+          }
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -1168,
+        1072
+      ],
+      "id": "2fdccaa2-8d90-4d4b-9f88-a02309decf24",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "J2XrevZTLN8i9P7e",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -1072,
+        1184
+      ],
+      "id": "723b4f1c-fc98-472b-97dc-55780a01ffa9",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        -1024,
+        1280
+      ],
+      "id": "f17ca603-1e0b-4bc7-82f5-9ef1e01ddf7f",
+      "name": "MCP Client"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Target Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Target Config": {
+      "main": [
+        [
+          {
+            "node": "Start Async Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Async Scan": {
+      "main": [
+        [
+          {
+            "node": "Save Job Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Job Info": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Check Scan Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Scan Status": {
+      "main": [
+        [
+          {
+            "node": "Is Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Completed?": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scan Results": {
+      "main": [
+        [
+          {
+            "node": "Format Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed?": {
+      "main": [
+        [
+          {
+            "node": "Handle Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Increment Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Retry": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Input": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Async Scan1": {
+      "main": [
+        [
+          {
+            "node": "Save Job Info1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Job Info1": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 Seconds1": {
+      "main": [
+        [
+          {
+            "node": "Check Scan Status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Scan Status1": {
+      "main": [
+        [
+          {
+            "node": "Is Completed?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Completed?1": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Failed?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scan Results1": {
+      "main": [
+        [
+          {
+            "node": "Format Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed?1": {
+      "main": [
+        [
+          {
+            "node": "Handle Failure1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Increment Retry1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Retry1": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results1": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Target Config1": {
+      "main": [
+        [
+          {
+            "node": "Start Async Scan1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Target Domain": {
+      "main": [
+        [
+          {
+            "node": "Prepend HTTPS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set Target Config",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepend HTTPS1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepend HTTPS2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Input1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Start Async Scan2": {
+      "main": [
+        [
+          {
+            "node": "Save Job Info2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Job Info2": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 Seconds2": {
+      "main": [
+        [
+          {
+            "node": "Check Scan Status2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Scan Status2": {
+      "main": [
+        [
+          {
+            "node": "Is Completed?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Completed?2": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Failed?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scan Results2": {
+      "main": [
+        [
+          {
+            "node": "Format Results2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed?2": {
+      "main": [
+        [
+          {
+            "node": "Handle Failure2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Increment Retry2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Retry2": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results2": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Target Config2": {
+      "main": [
+        [
+          {
+            "node": "Start Async Scan2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Input2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Prepend HTTPS": {
+      "main": [
+        [
+          {
+            "node": "Set Target Config1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepend HTTPS1": {
+      "main": [
+        [
+          {
+            "node": "Set Target Config2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Async Scan3": {
+      "main": [
+        [
+          {
+            "node": "Save Job Info3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Job Info3": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 Seconds3": {
+      "main": [
+        [
+          {
+            "node": "Check Scan Status3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Scan Status3": {
+      "main": [
+        [
+          {
+            "node": "Is Completed?3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Completed?3": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Failed?3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scan Results3": {
+      "main": [
+        [
+          {
+            "node": "Format Results3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed?3": {
+      "main": [
+        [
+          {
+            "node": "Handle Failure3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Increment Retry3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Retry3": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results3": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Target Config3": {
+      "main": [
+        [
+          {
+            "node": "Start Async Scan3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepend HTTPS2": {
+      "main": [
+        [
+          {
+            "node": "Set Target Config3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Input3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Client": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "fae39f47-3e2c-4036-a8f3-1184cc376a35",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d600756f141b274a3143d44fd5e3fd32a6e9353753558b9a411b71cc9d2438a7"
+  },
+  "id": "2gVX1c5FTC-mXlHKE6ftv",
+  "tags": [
+    {
+      "updatedAt": "2026-01-14T17:52:23.787Z",
+      "createdAt": "2026-01-14T17:52:23.787Z",
+      "id": "jetjm8Hr82rBZYwE",
+      "name": "mcp"
+    },
+    {
+      "updatedAt": "2026-01-14T17:52:23.785Z",
+      "createdAt": "2026-01-14T17:52:23.785Z",
+      "id": "tmF0opLeYGpVkuqE",
+      "name": "security"
+    }
+  ]
+}

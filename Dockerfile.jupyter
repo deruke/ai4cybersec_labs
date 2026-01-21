@@ -1,0 +1,9 @@
+FROM jupyter/tensorflow-notebook:latest
+
+# Jupyter container for student notebooks
+# The jupyter-work volume persists notebooks between container restarts
+
+USER jovyan
+
+# Default command starts Jupyter Lab
+CMD ["start-notebook.sh"]

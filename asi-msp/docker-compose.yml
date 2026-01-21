@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  mcp-security-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-security-server
+    image: mcp-security-server:latest
+    ports:
+      - "3000:3000"
+    environment:
+      # Authentication token - CHANGE THIS!
+      - MCP_TOKEN=${MCP_TOKEN:-change-this-token-in-production}
+
+      # Logging configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE=/app/logs/server.log
+      - AUDIT_LOG_PATH=/app/logs/audit.log
+
+      # Authorized networks (comma-separated CIDR ranges)
+      - AUTHORIZED_NETWORKS=${AUTHORIZED_NETWORKS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+
+      # Blacklisted networks (comma-separated CIDR ranges)
+      - BLACKLISTED_NETWORKS=${BLACKLISTED_NETWORKS:-127.0.0.0/8,169.254.0.0/16}
+
+      # Authorized domains for web testing (comma-separated)
+      - AUTHORIZED_DOMAINS=${AUTHORIZED_DOMAINS:-}
+
+      # Configuration path
+      - CONFIG_PATH=/app/config/tools.yaml
+
+      # Debug mode (set to true for development)
+      - DEBUG=${DEBUG:-false}
+
+    volumes:
+      # Persistent logs
+      - ./logs:/app/logs
+
+      # Configuration
+      - ./config:/app/config
+
+      # Scan results
+      - scan-results:/tmp/scans
+
+    networks:
+      - ai_ctf_default
+
+    restart: unless-stopped
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Capabilities (required for some network tools)
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+
+volumes:
+  scan-results:
+    driver: local
+
+networks:
+  ai_ctf_default:
+    external: true
+    name: ai-ctf_default
