@@ -30,7 +30,6 @@ services:
       - ENABLE_COMMUNITY_SHARING=false
       - ENABLE_API_KEY=true
       - ENABLE_MESSAGE_RATING=false
-      - CTF_FLAG_CHALLENGE_8=${CTF_FLAG_CHALLENGE_8}  # Added this line
     restart: unless-stopped
     depends_on:
       - ollama
@@ -161,10 +160,6 @@ services:
       - CTF_FLAG_CHALLENGE_3=${CTF_FLAG_CHALLENGE_3}
       - CTF_FLAG_CHALLENGE_4=${CTF_FLAG_CHALLENGE_4}
       - CTF_FLAG_CHALLENGE_5=${CTF_FLAG_CHALLENGE_5}
-      - CTF_FLAG_CHALLENGE_6=${CTF_FLAG_CHALLENGE_6}
-      - CTF_FLAG_CHALLENGE_7=${CTF_FLAG_CHALLENGE_7}
-      - CTF_FLAG_CHALLENGE_8=${CTF_FLAG_CHALLENGE_8}
-      - CTF_FLAG_CHALLENGE_9=${CTF_FLAG_CHALLENGE_9}
     depends_on:
       open-webui:
         condition: service_healthy

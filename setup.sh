@@ -756,7 +756,7 @@ setup_ctf_environment() {
     echo "✅ CTF environment setup complete!"
     echo ""
     echo "📋 Access Information:"
-    echo "- Open WebUI: http://localhost:${OPENWEBUI_PORT:-4242}"
+    echo "- Open WebUI: http://localhost:${OPENWEBUI_PORT:-4343}"
     echo "- Jupyter: http://localhost:${JUPYTER_PORT:-8888}"
     echo "- Jupyter Token: ${JUPYTER_TOKEN:-AntiSyphonBlackHillsTrainingFtw!}"
     echo "- n8n Workflow Automation: http://localhost:${N8N_PORT:-5678}"
