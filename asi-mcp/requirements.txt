@@ -1,0 +1,56 @@
+# MCP Security Training Server Requirements
+
+# MCP Framework
+mcp>=0.9.0
+
+# FastAPI and web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+sse-starlette>=1.8.2
+
+# HTTP client
+httpx>=0.25.0
+aiohttp>=3.9.0
+
+# Data validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Configuration
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Async support
+aiofiles>=23.2.1
+asyncio>=3.4.3
+
+# Logging
+python-json-logger>=2.0.7
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Monitoring (optional)
+prometheus-client>=0.19.0
+
+# Testing
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+pytest-cov>=4.1.0
+httpx>=0.25.0
+
+# Security tools Python libraries
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=4.9.3
+
+# Cloud security tools removed - incompatible with Python 3.13
+# prowler and scout-suite require Python <3.13
+# They are installed separately in Dockerfile (optional)
+
+# Additional utilities
+colorama>=0.4.6
+tabulate>=0.9.0
+rich>=13.7.0

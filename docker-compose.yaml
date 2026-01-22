@@ -80,8 +80,8 @@ services:
     container_name: n8n
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./asi-msp/logs:/asi-mcp-logs:ro
-      - ./asi-msp:/asi-mcp:ro
+      - ./asi-mcp/logs:/asi-mcp-logs:ro
+      - ./asi-mcp:/asi-mcp:ro
     ports:
       - "${N8N_PORT:-5678}:5678"
     environment:
@@ -104,7 +104,7 @@ services:
     restart: unless-stopped
   mcp-security-server:
     build:
-      context: ./asi-msp
+      context: ./asi-mcp
       dockerfile: Dockerfile
     container_name: mcp-security-server
     ports:
@@ -121,8 +121,8 @@ services:
       - DEBUG=${DEBUG:-false}
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./asi-msp/logs:/app/logs
-      - ./asi-msp/config:/app/config
+      - ./asi-mcp/logs:/app/logs
+      - ./asi-mcp/config:/app/config
       - scan-results:/tmp/scans
     restart: unless-stopped
     cap_add:
