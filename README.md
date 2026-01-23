@@ -5,6 +5,10 @@ This repository contains a complete lab environment for learning about AI in cyb
 - **Prompt Injection CTF**: 5 challenges teaching LLM security concepts
 - **Jupyter Notebooks**: Hands-on labs for phishing detection with ML/AI
 - **Open WebUI**: Chat interface for interacting with LLM challenges
+- **n8n**: n8n security automation workflows
+- **asi-mcp**: Custom MCP server with cyber security tools that work with n8n
+
+Note that this repository was made to run locally in a training and testing environment. Do not use for production or expose to directly to the internet.
 
 ## Prerequisites
 
@@ -88,6 +92,9 @@ You should see these services with status "Up" or "running":
 | Open WebUI | 4242 | http://localhost:4242 |
 | Jupyter | 8888 | http://localhost:8888 |
 | Ollama | 11435 | http://localhost:11435 |
+| n8n | 5678 | http://localhost:5678 |
+
+Note there will be other containers running as well.
 
 ---
 
