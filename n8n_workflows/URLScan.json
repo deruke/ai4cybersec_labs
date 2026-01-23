@@ -1,0 +1,148 @@
+{
+  "name": "URLScan",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -160
+      ],
+      "id": "866a0054-f1ea-48aa-97b7-c1a4e607b050",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "={{  $json.url }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.urlScanIo",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -160
+      ],
+      "id": "80c85a4b-9bb7-4096-bb73-7ec3ac810289",
+      "name": "Perform a scan",
+      "credentials": {
+        "urlScanIoApi": {
+          "id": "fCm6GJfidqwXdxWj",
+          "name": "urlscan.io account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"url\": \"https://www.mit.edu\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "50b3aee3-278f-4f48-ac65-8ba8bf5e5b40",
+      "name": "Set URL"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "scanId": "={{ $json.scanId }}"
+      },
+      "type": "n8n-nodes-base.urlScanIo",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -160
+      ],
+      "id": "8749f0a9-81f0-4491-a3e6-176e95e7bde5",
+      "name": "Get Scan Results",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "notesInFlow": true,
+      "credentials": {
+        "urlScanIoApi": {
+          "id": "fCm6GJfidqwXdxWj",
+          "name": "urlscan.io account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        -160
+      ],
+      "id": "fc924328-a892-4621-828b-35f060b900ff",
+      "name": "Wait 10 Seconds",
+      "webhookId": "c68f5fa6-d34c-4921-ad79-b176837be0e0"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Set URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perform a scan": {
+      "main": [
+        [
+          {
+            "node": "Wait 10 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set URL": {
+      "main": [
+        [
+          {
+            "node": "Perform a scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "1435e905-a22f-425d-a061-234929e88c80",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a47df4ce79bb38adda9a2ea42dc28b921b938de57e9f1fc050e2ebada50bdbd3"
+  },
+  "id": "1fLU-BAnKDiDegQz0Qi2T",
+  "tags": []
+}
