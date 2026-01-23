@@ -1,0 +1,36 @@
+# API Keys and secrets
+.openai_key
+.anthropic_key
+.hfkey
+
+# Environment overrides with secrets
+.env.local
+.env.secret
+
+# Docker volumes data (if stored locally)
+volumes/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
