@@ -56,6 +56,7 @@ services:
       - JUPYTER_TOKEN=${JUPYTER_TOKEN:-AntiSyphonBlackHillsTrainingFtw!}
     volumes:
       - jupyter-work:/home/jovyan/work
+      - ./jupyter_notebooks:/home/jovyan/work/notebooks:ro
     restart: unless-stopped
     command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-AntiSyphonBlackHillsTrainingFtw!}'
   postgres:

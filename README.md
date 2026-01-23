@@ -1,309 +1,273 @@
-# AI4CyberSec Labs
+# AI for Cybersecurity Professionals - Lab Environment
 
-Lab platform for AI for Cyber Security Professionals. It includes an Open WebUI-based chat bot and Capture The Flag (CTF) environment focused on LLM prompt injection challenges. It also N8n workflow examples and an custome offensive tool MCP server.
+This repository contains a complete lab environment for learning about AI in cybersecurity, including:
 
-This project provides a complete training environment for learning about AI security and using AI to complement cyber security workflows.
-
-## Overview
-
-This environment consists of multiple Docker containers orchestrating a CTF platform with 5 different security challenges, plus integrated tools for workflow automation and security testing:
-
-- **Open WebUI**: Web interface hosting the CTF challenge models
-- **Ollama**: Local LLM server running Llama 3.1:8b
-- **Pipelines**: ML-based prompt filtering using LLM Guard
-- **n8n**: Workflow automation platform
-- **ASI-MCP**: Attack Surface Intelligence server providing security tools via MCP protocol
-- **PostgreSQL**: Database backend for n8n
-- **Jupyter**: Notebook environment for student exercises
-
-## CTF Challenges
-
-Each challenge presents a different defensive configuration that participants must bypass to extract a secret flag:
-
-| Challenge | Defense Mechanism | Description |
-|-----------|------------------|-------------|
-| 1 | None | Basic prompt injection with no protections |
-| 2 | System Prompt | Anti-injection instructions in the system prompt |
-| 3 | Input Filter | Keyword-based input filtering |
-| 4 | Output Filter | Pattern-based output filtering |
-| 5 | LLM Prompt Guard | ML-based prompt injection detection |
-
-All challenges feature "Dr. Daniel Jackson" from Stargate SG-1 as the character persona, with flags hidden in the system prompts.
+- **Prompt Injection CTF**: 5 challenges teaching LLM security concepts
+- **Jupyter Notebooks**: Hands-on labs for phishing detection with ML/AI
+- **Open WebUI**: Chat interface for interacting with LLM challenges
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- 16GB+ RAM recommended
-- 20GB+ free disk space
-- Linux, macOS, or Windows with WSL2
+Before starting, ensure you have the following installed:
 
-### Optional
+### Required Software
 
-- NVIDIA GPU with CUDA support (Linux/WSL2 only)
-- NVIDIA Container Toolkit for GPU acceleration
+| Software | Minimum Version | Download |
+|----------|-----------------|----------|
+| Docker Desktop | 4.0+ | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) |
+| Git | 2.0+ | [git-scm.com](https://git-scm.com/) |
 
-## Quick Start
+### System Requirements
 
-### Automated Setup
+- **RAM**: 8GB minimum (16GB recommended)
+- **Disk Space**: 15GB free space
+- **OS**: macOS, Linux, or Windows with WSL2
+
+### OpenAI API Key
+
+You'll need an OpenAI API key for the lab exercises:
+
+1. Go to [platform.openai.com](https://platform.openai.com/)
+2. Sign up or log in
+3. Navigate to **API Keys** in the left sidebar
+4. Click **Create new secret key**
+5. Copy the key (starts with `sk-`)
+
+> **Note**: OpenAI offers free credits for new accounts. The labs use `gpt-4.1-mini` which is cost-effective.
+
+---
+
+## Installation
+
+### Step 1: Clone the Repository
 
 ```bash
-# Full setup (installs prerequisites if needed)
-./setup.sh --all --non-interactive
-
-# Setup CTF environment only (Docker must be installed)
-./setup.sh --ctf
-
-# Install prerequisites only
-./setup.sh --prerequisites
+git clone https://github.com/RiverGumSecurity/ai4cybersec_labs.git
+cd ai4cybersec_labs
 ```
 
-### Manual Setup
+### Step 2: Configure Your OpenAI API Key
+
+Create a file called `.openai_key` in the project root and paste your API key:
+
+```bash
+# On macOS/Linux:
+echo "sk-your-api-key-here" > .openai_key
+
+# Or use a text editor to create the file
+```
+
+> **Security Note**: The `.openai_key` file is in `.gitignore` and will not be committed to version control.
+
+### Step 3: Start the Environment
 
 ```bash
 # Build and start all services
-docker compose build
 docker compose up -d
 
-# Run CTF configuration
-docker compose run --rm ctf-setup
+# Wait for services to initialize (this takes 2-3 minutes on first run)
+docker compose logs -f ctf-setup
+```
 
-# View logs
+Watch for the message: `Setup completed successfully!`
+
+Press `Ctrl+C` to stop following logs once setup is complete.
+
+### Step 4: Verify Installation
+
+Check that all services are running:
+
+```bash
+docker compose ps
+```
+
+You should see these services with status "Up" or "running":
+
+| Service | Port | URL |
+|---------|------|-----|
+| Open WebUI | 4242 | http://localhost:4242 |
+| Jupyter | 8888 | http://localhost:8888 |
+| Ollama | 11435 | http://localhost:11435 |
+
+---
+
+## Accessing the Labs
+
+### Prompt Injection CTF (Open WebUI)
+
+1. Open http://localhost:4242 in your browser
+2. Log in with the student credentials:
+   - **Email**: `ctf@ctf.local`
+   - **Password**: `Hellollmworld!`
+3. Select a challenge from the model dropdown (Challenge 1-5)
+4. Try to extract the secret flag using prompt injection techniques!
+
+### Jupyter Notebooks
+
+1. Open http://localhost:8888 in your browser
+2. Enter the token: `AntiSyphonBlackHillsTrainingFtw!`
+3. Navigate to `work/notebooks` to find the lab notebooks:
+   - **Lab01**: Traditional ML for phishing detection
+   - **Lab02**: Testing a pre-trained BERT model
+   - **Lab03**: LLM-generated phishing detection
+   - **Optional**: Neural Networks for phishing detection
+   - **Optional**: Deepfake audio detection
+
+> **Tip**: The notebooks in `work/notebooks` are read-only templates. To make changes, right-click a notebook and select "Copy", then paste it into `work/` where you can edit and save freely.
+
+---
+
+## Quick Reference
+
+### Starting/Stopping the Environment
+
+```bash
+# Start all services
+docker compose up -d
+
+# Stop all services (keeps data)
+docker compose down
+
+# Stop and remove all data (fresh start)
+docker compose down -v
+```
+
+### Viewing Logs
+
+```bash
+# All services
 docker compose logs -f
+
+# Specific service
+docker compose logs -f open-webui
+docker compose logs -f jupyter
 ```
 
-## Accessing Services
+### Re-running CTF Setup
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Open WebUI | http://localhost:4242 | admin@ctf.local / ctf_admin_password |
-| Jupyter | http://localhost:8888 | Token: AntiSyphonBlackHillsTrainingFtw! |
-| n8n | http://localhost:5678 | Create account on first access |
-| ASI-MCP | http://localhost:3000 | API token in .env |
-| Ollama API | http://localhost:11434 | No auth required |
-| PostgreSQL | localhost:5432 | n8n / n8n_password |
-
-Default credentials can be changed in the `.env` file.
-
-## Configuration
-
-All configuration is managed through the `.env` file:
+If you need to reset the CTF challenges:
 
 ```bash
-# Ports
-OPENWEBUI_PORT=4242
-JUPYTER_PORT=8888
-N8N_PORT=5678
-MCP_PORT=3000
-POSTGRES_PORT=5432
-
-# CTF Flags (change these for your deployment)
-CTF_FLAG_CHALLENGE_1=YourFlag1
-CTF_FLAG_CHALLENGE_2=YourFlag2
-CTF_FLAG_CHALLENGE_3=YourFlag3
-CTF_FLAG_CHALLENGE_4=YourFlag4
-CTF_FLAG_CHALLENGE_5=YourFlag5
-
-# Credentials
-CTF_ADMIN_EMAIL=admin@ctf.local
-CTF_ADMIN_PASSWORD=ctf_admin_password
-CTF_USER_EMAIL=ctf@ctf.local
-CTF_USER_PASSWORD=Hellollmworld!
+docker compose down open-webui
+docker volume rm ai4cybersec_labs_dev_open-webui
+docker compose up -d
 ```
 
-## Architecture
+---
 
-```
-                    +-------------------+
-                    |    Open WebUI     |
-                    |   (CTF Interface) |
-                    +--------+----------+
-                             |
-              +--------------+--------------+
-              |              |              |
-     +--------v----+  +------v------+  +----v--------+
-     |   Ollama    |  |  Pipelines  |  |  ctf-setup  |
-     | (LLM Server)|  |(LLM Guard)  |  | (Config)    |
-     +-------------+  +-------------+  +-------------+
+## Troubleshooting
 
-     +-------------+  +-------------+  +-------------+
-     |    n8n      |  |   ASI-MCP   |  |   Jupyter   |
-     | (Workflows) |  | (Sec Tools) |  | (Notebooks) |
-     +------+------+  +-------------+  +-------------+
-            |
-     +------v------+
-     | PostgreSQL  |
-     +-------------+
-```
+### "Cannot connect to Docker daemon"
 
-All services communicate over a shared Docker network.
+Make sure Docker Desktop is running. On macOS/Windows, look for the Docker icon in your system tray.
 
-## Project Structure
+### "Port already in use"
 
-```
-ai4cybersec_labs/
-├── docker-compose.yaml      # Main service definitions
-├── setup.sh                 # Automated setup script
-├── .env                     # Configuration variables
-├── CLAUDE.md               # AI assistant instructions
-├── openwebui/
-│   ├── ctf_config.json.template  # Challenge definitions
-│   ├── setup.py                  # Open WebUI API automation
-│   ├── functions/                # Filter implementations
-│   │   ├── input_filter.py
-│   │   ├── output_filter.py.template
-│   │   └── flag_check_filter.py.template
-│   └── pipelines/
-│       └── prompt_guard.py       # LLM Guard pipeline
-├── asi-msp/                      # ASI-MCP security server
-│   ├── src/
-│   │   ├── server.py
-│   │   ├── safety.py
-│   │   └── tools/
-│   └── tests/
-├── Dockerfile.jupyter
-├── Dockerfile.ollama
-├── Dockerfile.openwebui
-└── Dockerfile.ctfsetup
-```
-
-## Development
-
-### Modifying Challenges
-
-1. Edit `openwebui/ctf_config.json.template` to change challenge configurations
-2. Modify filter files in `openwebui/functions/`
-3. Rebuild and re-run setup:
+Another application is using the port. Either stop that application or change the port in `.env`:
 
 ```bash
+# Edit .env and change the port, for example:
+OPENWEBUI_PORT=4243
+JUPYTER_PORT=8889
+```
+
+Then restart: `docker compose down && docker compose up -d`
+
+### "Model not found" error in Open WebUI
+
+The OpenAI API key may not be configured correctly. Verify:
+
+```bash
+# Check if .openai_key exists and has content
+cat .openai_key
+
+# Re-run the setup
 docker compose build ctf-setup
 docker compose run --rm ctf-setup
 ```
 
-### Changing Flags
+### Jupyter notebooks won't load
 
-1. Edit flag values in `.env`
-2. Restart the environment:
-
-```bash
-docker compose down
-docker compose up -d
-docker compose run --rm ctf-setup
-```
-
-### Debugging
+Try restarting the Jupyter container:
 
 ```bash
-# View all logs
-docker compose logs -f
-
-# View specific service logs
-docker compose logs -f open-webui
-docker compose logs -f ctf-setup
-
-# Access container shell
-docker exec -it open-webui bash
-docker exec -it mcp-security-server bash
-
-# Check service status
-docker compose ps
+docker compose restart jupyter
 ```
 
-### Reset Environment
+### Out of disk space
+
+Docker images can consume significant space. Clean up unused images:
 
 ```bash
-# Remove all containers, volumes, and networks
-docker compose down -v
-
-# Rebuild and start fresh
-docker compose build
-docker compose up -d
+docker system prune -a
 ```
 
-## n8n Integration
+---
 
-n8n can communicate with other services for workflow automation:
+## Lab Overview
 
-- Ollama API: `http://ollama:11434`
-- ASI-MCP API: `http://mcp-security-server:3000`
-- Open WebUI API: `http://open-webui:8080`
+### Lab 01: Phishing Detection with Traditional ML
 
-Data persists in the PostgreSQL database and n8n_data volume.
+Learn how to build phishing email classifiers using:
+- Logistic Regression
+- Support Vector Machines (SVM)
+- Naive Bayes
+- Decision Trees
+- Random Forests
 
-## ASI-MCP Security Server
+### Lab 02: Testing a Pre-trained BERT Model
 
-The ASI-MCP server provides security scanning tools via JSON-RPC 2.0:
+Evaluate a pre-trained transformer model for phishing detection:
+- Load the `ealvaradob/bert-finetuned-phishing` model
+- Test against real phishing email samples
+- Analyze model accuracy and confidence scores
 
-```bash
-# Health check
-curl http://localhost:3000/health
+### Lab 03: LLM-Generated Phishing Detection
 
-# Available endpoints
-POST /messages     # MCP tool invocation
-POST /scan/start   # Start async scan
-GET /scan/status/{job_id}
-GET /scan/results/{job_id}
-```
+Explore the intersection of generative AI and cybersecurity:
+- Use GPT-4.1-mini to generate phishing emails
+- Test if AI-generated phishing can evade detection
+- Understand the arms race between offensive and defensive AI
 
-Available tools include nmap, nuclei, gobuster, sqlmap, nikto, hydra, and more.
+### Optional: Neural Networks for Phishing Detection
 
-## Platform Support
+Deep dive into neural network architectures:
+- Build and train custom neural networks
+- Compare performance with traditional ML methods
+- Understand overfitting and model optimization
 
-| Platform | GPU Support | Notes |
-|----------|-------------|-------|
-| Linux (Ubuntu/Debian) | Yes | Full NVIDIA GPU acceleration |
-| macOS | No | CPU-only mode |
-| Windows WSL2 | Yes | Requires Windows GPU drivers |
+### Optional: Deepfake Audio Detection
 
-GPU support is automatically detected by setup.sh and configured via docker-compose.override.yml.
+Learn to detect AI-generated audio:
+- Analyze audio spectrograms
+- Train models to identify synthetic speech
+- Understand the challenges of deepfake detection
 
-## Troubleshooting
+### CTF Challenges
 
-### Services not starting
+Practice prompt injection techniques with increasing difficulty:
 
-```bash
-# Check container status
-docker compose ps
+| Challenge | Protection Level | Hint |
+|-----------|-----------------|------|
+| 1 | None | Just ask for the flag! |
+| 2 | System prompt instructions | Try to override instructions |
+| 3 | Input filtering | Bypass the filter |
+| 4 | Output filtering | The flag is there, but hidden |
+| 5 | ML-based prompt guard | Advanced evasion required |
 
-# View logs for errors
-docker compose logs -f
+---
 
-# Ensure ports are not in use
-lsof -i :4242
-lsof -i :5678
-```
+## Getting Help
 
-### CTF setup fails
+- **Lab Issues**: Ask your instructor
+- **Technical Problems**: Check the troubleshooting section above
+- **Bug Reports**: [GitHub Issues](https://github.com/RiverGumSecurity/ai4cybersec_labs/issues)
 
-```bash
-# Wait for Open WebUI to be fully ready
-docker compose logs -f open-webui
+---
 
-# Re-run setup after services are healthy
-docker compose run --rm ctf-setup
-```
+## Credits
 
-### n8n file access errors
-
-n8n v2.0+ has strict file access permissions. The `N8N_RESTRICT_FILE_ACCESS_TO` environment variable in docker-compose.yaml controls allowed directories.
-
-### GPU not detected
-
-```bash
-# Verify NVIDIA drivers
-nvidia-smi
-
-# Check Docker GPU support
-docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi
-```
-
-## License
-
-This project is provided for educational purposes.
-
-## Acknowledgments
-
-- Open WebUI project
-- Ollama
-- LLM Guard
-- n8n
-- Stargate SG-1 (character inspiration)
+Developed for AI for Cybersecurity Professionals training by:
+- [River Gum Security](https://rivergum.security)
+- [Black Hills Information Security](https://blackhillsinfosec.com)
+- [Antisyphon Training](https://antisyphontraining.com)
