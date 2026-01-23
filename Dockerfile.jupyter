@@ -3,7 +3,39 @@ FROM jupyter/tensorflow-notebook:latest
 # Jupyter container for student notebooks
 # The jupyter-work volume persists notebooks between container restarts
 
+USER root
+
+# Create directory for pre-downloaded datasets
+RUN mkdir -p /home/jovyan/datasets && chown jovyan:users /home/jovyan/datasets
+
 USER jovyan
+
+# Install required packages for the labs
+RUN pip install --no-cache-dir \
+    transformers \
+    torch \
+    huggingface_hub \
+    datasets \
+    accelerate \
+    openai \
+    anthropic \
+    scikit-learn \
+    pyarrow>=14.0.0
+
+# Pre-download the BERT phishing detection model
+# This caches to ~/.cache/huggingface/hub/ so students don't have to download during class
+RUN python -c "\
+from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+print('[*] Pre-downloading BERT phishing detection model...'); \
+model_name = 'ealvaradob/bert-finetuned-phishing'; \
+AutoTokenizer.from_pretrained(model_name); \
+AutoModelForSequenceClassification.from_pretrained(model_name); \
+print('[+] Model downloaded successfully!')"
+
+# Pre-download the phishing email dataset
+RUN curl -L -o /home/jovyan/datasets/Phishing_Email.csv.gz \
+    "https://raw.githubusercontent.com/RiverGumSecurity/Datasets/refs/heads/main/Kaggle/Phishing_Email.csv.gz" \
+    && echo "[+] Phishing dataset downloaded successfully!"
 
 # Default command starts Jupyter Lab
 CMD ["start-notebook.sh"]

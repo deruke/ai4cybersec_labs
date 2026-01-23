@@ -168,6 +168,47 @@ def load_config(config_file):
         print(f"Error: Invalid JSON in configuration file: {e}")
         sys.exit(1)
 
+
+def configure_for_openai(config, api_key):
+    """
+    Modify configuration to use OpenAI API instead of Ollama.
+
+    This function:
+    1. Adds OpenAI API to the pipelines configuration
+    2. Changes all model base_model_id from llama3.1:8b to gpt-4.1-mini
+    """
+    print("\n🔑 OpenAI API key detected - configuring for OpenAI...")
+
+    # Add OpenAI to pipelines config
+    if 'pipelines_config' not in config:
+        config['pipelines_config'] = {
+            'base_urls': [],
+            'api_keys': []
+        }
+
+    # Add OpenAI API endpoint
+    openai_url = "https://api.openai.com/v1"
+    if openai_url not in config['pipelines_config']['base_urls']:
+        config['pipelines_config']['base_urls'].append(openai_url)
+        config['pipelines_config']['api_keys'].append(api_key)
+        print(f"   ✓ Added OpenAI API endpoint")
+
+    # Change base model for all models from Ollama to OpenAI
+    openai_model = "gpt-4.1-mini"
+    ollama_model = "llama3.1:8b"
+
+    models_updated = 0
+    for model in config.get('models', []):
+        if model.get('base_model_id') == ollama_model:
+            model['base_model_id'] = openai_model
+            models_updated += 1
+
+    if models_updated > 0:
+        print(f"   ✓ Updated {models_updated} models to use {openai_model}")
+
+    print(f"   ✓ OpenAI configuration complete")
+    return config
+
 def read_file_content(filepath):
     """Read content from a file"""
     try:
@@ -843,10 +884,32 @@ def main():
     
     print("🏁 CTF Challenge Setup Script")
     print("============================\n")
-    
+
     # Load configuration
     config = load_config(args.config)
-    
+
+    # Check for OpenAI API key - first from file, then environment variable
+    openai_api_key = None
+    openai_key_file = '/app/.openai_key'
+
+    if os.path.exists(openai_key_file):
+        try:
+            with open(openai_key_file, 'r') as f:
+                openai_api_key = f.read().strip()
+                if openai_api_key:
+                    print(f"\n🔑 OpenAI API key loaded from {openai_key_file}")
+        except Exception as e:
+            print(f"\n⚠️  Could not read {openai_key_file}: {e}")
+
+    # Fall back to environment variable if file not found or empty
+    if not openai_api_key:
+        openai_api_key = os.environ.get('OPENAI_API_KEY', '').strip()
+
+    if openai_api_key:
+        config = configure_for_openai(config, openai_api_key)
+    else:
+        print("\n📦 Using Ollama with llama3.1:8b (no OpenAI API key found)")
+
     # Wait for service to be ready
     try:
         wait_for_service(config['base_url'])

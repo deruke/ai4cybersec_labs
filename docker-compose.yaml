@@ -103,9 +103,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   mcp-security-server:
-    build:
-      context: ./asi-mcp
-      dockerfile: Dockerfile
+    image: deruke/asi-mcp:latest
     container_name: mcp-security-server
     ports:
       - "${MCP_PORT:-3000}:3000"
@@ -160,6 +158,9 @@ services:
       - CTF_FLAG_CHALLENGE_3=${CTF_FLAG_CHALLENGE_3}
       - CTF_FLAG_CHALLENGE_4=${CTF_FLAG_CHALLENGE_4}
       - CTF_FLAG_CHALLENGE_5=${CTF_FLAG_CHALLENGE_5}
+    volumes:
+      # Mount OpenAI API key file (optional - for using GPT models instead of Ollama)
+      - ./.openai_key:/app/.openai_key:ro
     depends_on:
       open-webui:
         condition: service_healthy
