@@ -1,0 +1,121 @@
+{
+  "job_id": "f25ecd41-9e9a-4103-bdf1-691d80ae0dd9",
+  "status": "completed",
+  "tool": "gobuster_scan",
+  "target": "https://ginandjuice.shop",
+  "completed_at": "2026-01-24T01:15:07.190830",
+  "duration_seconds": 600.01556,
+  "results": {
+    "tool": "gobuster",
+    "target": "https://ginandjuice.shop",
+    "success": false,
+    "findings": [
+      {
+        "path": "admin",
+        "status_code": 403,
+        "size": 15,
+        "full_line": "admin                (Status: 403) [Size: 15]"
+      },
+      {
+        "path": "logout",
+        "status_code": 302,
+        "size": 0,
+        "full_line": "logout               (Status: 302) [Size: 0] [--> /]"
+      },
+      {
+        "path": "login",
+        "status_code": 200,
+        "size": 7451,
+        "full_line": "login                (Status: 200) [Size: 7451]"
+      },
+      {
+        "path": "blog",
+        "status_code": 200,
+        "size": 10923,
+        "full_line": "blog                 (Status: 200) [Size: 10923]"
+      },
+      {
+        "path": "catalog",
+        "status_code": 200,
+        "size": 16798,
+        "full_line": "catalog              (Status: 200) [Size: 16798]"
+      },
+      {
+        "path": "Admin",
+        "status_code": 403,
+        "size": 15,
+        "full_line": "Admin                (Status: 403) [Size: 15]"
+      },
+      {
+        "path": "about",
+        "status_code": 200,
+        "size": 11166,
+        "full_line": "about                (Status: 200) [Size: 11166]"
+      },
+      {
+        "path": "Login",
+        "status_code": 200,
+        "size": 7442,
+        "full_line": "Login                (Status: 200) [Size: 7442]"
+      },
+      {
+        "path": "subscribe",
+        "status_code": 405,
+        "size": 20,
+        "full_line": "subscribe            (Status: 405) [Size: 20]"
+      },
+      {
+        "path": "ADMIN",
+        "status_code": 403,
+        "size": 15,
+        "full_line": "ADMIN                (Status: 403) [Size: 15]"
+      },
+      {
+        "path": "Blog",
+        "status_code": 200,
+        "size": 10905,
+        "full_line": "Blog                 (Status: 200) [Size: 10905]"
+      },
+      {
+        "path": "my-account",
+        "status_code": 302,
+        "size": 0,
+        "full_line": "my-account           (Status: 302) [Size: 0] [--> /login]"
+      },
+      {
+        "path": "analytics",
+        "status_code": 200,
+        "size": 0,
+        "full_line": "analytics            (Status: 200) [Size: 0]"
+      },
+      {
+        "path": "About",
+        "status_code": 200,
+        "size": 11148,
+        "full_line": "About                (Status: 200) [Size: 11148]"
+      },
+      {
+        "path": "Catalog",
+        "status_code": 200,
+        "size": 16780,
+        "full_line": "Catalog              (Status: 200) [Size: 16780]"
+      },
+      {
+        "path": "Logout",
+        "status_code": 302,
+        "size": 0,
+        "full_line": "Logout               (Status: 302) [Size: 0] [--> /]"
+      },
+      {
+        "path": "BLOG",
+        "status_code": 200,
+        "size": 10905,
+        "full_line": "BLOG                 (Status: 200) [Size: 10905]"
+      }
+    ],
+    "findings_count": 17,
+    "scan_info": "gobuster execution exceeded 600 seconds",
+    "duration_seconds": 600.011584
+  },
+  "success": true
+}
