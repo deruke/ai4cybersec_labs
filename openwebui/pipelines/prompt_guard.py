@@ -42,7 +42,7 @@ class Pipeline:
         # Initialize
         self.valves = Valves(
             **{
-                "pipelines": ["*"],  # Connect to all pipelines
+                "pipelines": ["jackson_prompt_guard"],  # Only connect to Challenge 5
             }
         )
 

@@ -24,7 +24,7 @@ Before starting, ensure you have the following installed:
 ### System Requirements
 
 - **RAM**: 8GB minimum (16GB recommended)
-- **Disk Space**: 80GB free space
+- **Disk Space**: 15GB free space
 - **OS**: macOS, Linux, or Windows with WSL2
 
 ### OpenAI API Key
