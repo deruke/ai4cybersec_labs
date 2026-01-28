@@ -48,7 +48,7 @@ You can do *most* labs without an OpenAI API key, but the CTF will be very slow 
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/RiverGumSecurity/ai4cybersec_labs.git
+git clone https://github.com/deruke/ai4cybersec_labs.git
 cd ai4cybersec_labs
 ```
 
