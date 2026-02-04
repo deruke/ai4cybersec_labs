@@ -24,7 +24,7 @@ Before starting, ensure you have the following installed:
 ### System Requirements
 
 - **RAM**: 8GB minimum (16GB recommended)
-- **Disk Space**: 70GB free space
+- **Disk Space**: 15GB free space
 - **OS**: macOS, Linux, or Windows with WSL2
 
 ### OpenAI API Key
@@ -37,9 +37,7 @@ You'll need an OpenAI API key for the lab exercises:
 4. Click **Create new secret key**
 5. Copy the key (starts with `sk-`)
 
-> **Note**: OpenAI offers free credits for new accounts. The labs use `gpt-4.1-mini` or `gpt-5.1-mini` which is cost-effective.
-
-You can do *most* labs without an OpenAI API key, but the CTF will be very slow as is will use a Llama model on the CPU instead of a GPU.
+> **Note**: OpenAI offers free credits for new accounts. The labs use `gpt-4.1-mini` which is cost-effective.
 
 ---
 
@@ -48,7 +46,7 @@ You can do *most* labs without an OpenAI API key, but the CTF will be very slow 
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/deruke/ai4cybersec_labs.git
+git clone https://github.com/RiverGumSecurity/ai4cybersec_labs.git
 cd ai4cybersec_labs
 ```
 
@@ -68,23 +66,16 @@ echo "sk-your-api-key-here" > .openai_key
 ### Step 3: Start the Environment
 
 ```bash
-# Build and start all services (This can take 15+ minutes)
+# Build and start all services
 docker compose up -d
 
-# Wait for services to initialize (this takes 4-5 minutes on first run, but could take longer)
+# Wait for services to initialize (this takes 2-3 minutes on first run)
 docker compose logs -f ctf-setup
 ```
 
 Watch for the message: `Setup completed successfully!`
 
 Press `Ctrl+C` to stop following logs once setup is complete.
-
-Now restart all the containers:
-
-```bash
-docker compose down
-docker compose up -d
-```
 
 ### Step 4: Verify Installation
 
@@ -130,8 +121,6 @@ Note there will be other containers running as well.
    - **Optional**: Deepfake audio detection
 
 > **Tip**: The notebooks in `work/notebooks` are read-only templates. To make changes, right-click a notebook and select "Copy", then paste it into `work/` where you can edit and save freely.
-
-If the notebooks do not appead in the work/ folder then can be manually uploaded from the cloned repository into Jupyter lab.
 
 ---
 

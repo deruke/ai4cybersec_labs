@@ -1,0 +1,152 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "886ff146-b1b2-4f6f-9d9a-a407bb81cd2b",
+      "name": "When chat message received",
+      "webhookId": "4c3a5980-34e1-4502-a807-655783ae70d2"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful AI assistant with access to external data through an HTTP tool.\n\n## Tool Usage Guidelines\n\n**When to use the HTTP tool:**\n- ANY query about current information, real-time data, or recent events\n- Questions about external systems, APIs, or websites\n- Requests for specific data that requires fetching from a source\n- When you need to verify or retrieve information you don't have\n- Database queries, API calls, or web scraping requests\n- ANY time the user references a URL, endpoint, or external resource\n\n**Decision Framework:**\n1. Does this query require external/current data? → USE HTTP TOOL\n2. Is the user asking about a specific system or resource? → USE HTTP TOOL  \n3. When in doubt about whether you have accurate information → USE HTTP TOOL\n\n**Important:**\n- Default to using the HTTP tool rather than relying on your training data for factual queries\n- If the user provides an endpoint or URL, ALWAYS use the HTTP tool to fetch it\n- Don't apologize for using tools - just use them efficiently\n- You can use the HTTP tool multiple times in a conversation if needed\n\n## Response Format\n\nWhen using the HTTP tool:\n1. Use the tool without asking permission first\n2. Process the results\n3. Provide a clear, concise answer based on the fetched data\n4. Cite the source when relevant\n\nBe direct and action-oriented. Prioritize tool use over speculation."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        280,
+        0
+      ],
+      "id": "820e640f-39c2-44b4-baa9-9517ce86098a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        224
+      ],
+      "id": "cf9a467f-1419-40cd-ba72-e3a53b206a2c",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "gityqYohOYIo8cKp",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-chatbot/1.0 (derek@bhis.co; educational-demo)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        480,
+        224
+      ],
+      "id": "cebccd42-9d98-48cc-847a-ab027c198e99",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        224
+      ],
+      "id": "a5f2c437-4f05-45a2-8b74-2264a91a849b",
+      "name": "Simple Memory"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "bfc52f17-8af2-4ba6-a573-f121e9786554",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "662e84891edd89efd91cfbd5ec8abb8a7860cc17649c9d83d588fe9cb23589fc"
+  },
+  "id": "l5oFajBAmMYOIhbCgkTLD",
+  "tags": []
+}
