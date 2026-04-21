@@ -46,7 +46,7 @@ You'll need an OpenAI API key for the lab exercises:
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/RiverGumSecurity/ai4cybersec_labs.git
+git clone https://github.com/deruke/ai4cybersec_labs.git
 cd ai4cybersec_labs
 ```
 
